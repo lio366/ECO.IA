@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eco-ia"
 version = "1.0.0"
-description = "Autonomous AI-Agent server system — OVHcloud US b3-8"
+description = "Autonomous AI-Agent server system"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-keywords = ["AI", "agents", "autonomous", "server", "monetization", "OVHcloud"]
+keywords = ["AI", "agents", "autonomous", "server", "monetization"]
 authors = [{ name = "Liorvys Guardiola" }]
 dependencies = [
     "fastapi>=0.115",
@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3", "pytest-asyncio>=0.26", "pytest-cov>=6.1"]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.26", "pytest-cov>=6.1", "ruff>=0.4"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
