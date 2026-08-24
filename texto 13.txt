@@ -1,0 +1,50 @@
+1. """Inter-agent communication via an in-process async message bus."""
+2. import asyncio, logging, uuid
+3. from dataclasses import dataclass, field
+4. from datetime import datetime
+5. from typing import Any, Callable, Coroutine, Dict, List, Optional
+6. logger = logging.getLogger(__name__)
+7. 
+8. @dataclass
+9. class Message:
+10.     sender: str
+11.     target: str
+12.     content: Dict[str, Any]
+13.     timestamp: datetime = field(default_factory=datetime.utcnow)
+14.     message_id: Optional[str] = None
+15.     def __post_init__(self):
+16.         if self.message_id is None:
+17.             self.message_id = str(uuid.uuid4())
+18.     def __str__(self):
+19.         return f"Message(id={self.message_id}, {self.sender}->{self.target})"
+20. 
+21. Handler = Callable[["Message"], Coroutine[Any, Any, None]]
+22. 
+23. class MessageBus:
+24.     def __init__(self):
+25.         self._subscribers: Dict[str, List[Handler]] = {}
+26.         self._history: List[Message] = []
+27.         self._max_history = 1000
+28.     async def subscribe(self, agent_name: str, handler: Handler):
+29.         for key in (agent_name, "*"):
+30.             self._subscribers.setdefault(key, []).append(handler)
+31.     async def unsubscribe(self, agent_name: str, handler: Handler):
+32.         for key in (agent_name, "*"):
+33.             h = self._subscribers.get(key, [])
+34.             if handler in h: h.remove(handler)
+35.     async def publish(self, message: Message):
+36.         self._store(message)
+37.         handlers = list(self._subscribers.get(message.target, []))
+38.         if message.target != "*":
+39.             for h in self._subscribers.get("*", []):
+40.                 if h not in handlers: handlers.append(h)
+41.         await asyncio.gather(*[h(message) for h in handlers], return_exceptions=True)
+42.     def _store(self, msg: Message):
+43.         self._history.append(msg)
+44.         if len(self._history) > self._max_history:
+45.             self._history = self._history[-self._max_history:]
+46.     def get_history(self, limit: int = 50): return self._history[-limit:]
+47.     def get_stats(self):
+48.         return {"total_messages": len(self._history),
+49.                 "subscribers": {k: len(v) for k, v in self._subscribers.items()}}
+50. 

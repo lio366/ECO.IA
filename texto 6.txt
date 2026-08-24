@@ -1,0 +1,76 @@
+1. orchestrator:
+2.   heartbeat_interval: 30
+3.   health_check_interval: 60
+4.   report_interval: 3600
+5.   llm:
+6.     provider: openai
+7.     model: gpt-4o-mini
+8.     temperature: 0.7
+9.     max_tokens: 2048
+10. 
+11. monetization:
+12.   billing:
+13.     currency: usd
+14.     trial_days: 14
+15.   pricing:
+16.     demand_multiplier: 1.0
+17.     update_interval: 300
+18.   clients:
+19.     upsell_check_interval: 86400
+20. 
+21. devops:
+22.   auto_heal:
+23.     check_interval: 60
+24.     max_restart_attempts: 3
+25.     services:
+26.       - eco-ia-api
+27.       - eco-ia-worker
+28.       - eco-ia-beat
+29.       - eco-ia-postgres
+30.       - eco-ia-redis
+31.       - eco-ia-nginx
+32.       - eco-ia-prometheus
+33.       - eco-ia-grafana
+34.   backup:
+35.     interval: 3600
+36.     retention_days: 30
+37.     local_paths:
+38.       - /opt/eco-ia/data
+39.       - /opt/eco-ia/config
+40.   updates:
+41.     security_update_interval: 86400
+42. 
+43. resources:
+44.   optimizer:
+45.     cpu_threshold: 85.0
+46.     ram_threshold: 90.0
+47.   scaler:
+48.     min_replicas: 1
+49.     max_replicas: 10
+50.     scale_up_cpu_threshold: 70.0
+51.     scale_down_cpu_threshold: 30.0
+52.   cleaner:
+53.     max_log_age_days: 7
+54.     max_log_size_mb: 100.0
+55.     cleanup_interval: 86400
+56. 
+57. security:
+58.   firewall:
+59.     allowed_ports: [22, 80, 443, 8000, 9090, 3000]
+60.     block_on_intrusion: true
+61.   intrusion_detector:
+62.     threshold_minutes: 5
+63.     brute_force_threshold: 10
+64.     check_interval: 300
+65.   auditor:
+66.     audit_interval: 3600
+67. 
+68. analytics:
+69.   reporter:
+70.     daily_report_hour: 8
+71.   predictor:
+72.     window_size: 20
+73.     z_score_threshold: 2.5
+74.   dashboard:
+75.     snapshot_interval: 60
+76. 

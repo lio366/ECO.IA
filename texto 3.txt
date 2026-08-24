@@ -1,0 +1,131 @@
+1. # 🌱 ECO-IA — Autonomous AI-Agent Server System
+2. 
+3. > Servidor **99.9% autónomo** con 6 Agentes IA que **se autoabastece**, **genera ingresos** y es **sostenible**.
+4. > Deployado en **OVHcloud US b3-8** | IP: `135.148.232.10` | Ubuntu 24.04
+5. 
+6. [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
+7. [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
+8. [![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.com/)
+9. [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)]()
+10. [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+11. 
+12. ---
+13. 
+14. ## 🎯 ¿Qué es ECO-IA?
+15. 
+16. Sistema multi-agente de IA que trabaja 24/7 para:
+17. 
+18. 1. 🔧 **Autoabastecerse** — monitoreo, auto-recuperación, backups
+19. 2. 💰 **Generar ingresos** — API de IA + hosting cobrado con Stripe
+20. 3. 🌿 **Ser sostenible** — optimización de recursos, escalado automático
+21. 
+22. ---
+23. 
+24. ## 🏗️ Los 6 Agentes
+25. 
+26. | Agente | Función |
+27. |--------|---------|
+28. | 🧠 **Orquestador** | Coordina todo, usa LLM para decisiones, reportes ejecutivos |
+29. | 💰 **Monetización** | Clientes, facturación Stripe, pricing dinámico |
+30. | 🔧 **DevOps** | Deploy automático, auto-healing, backups |
+31. | 🌿 **Recursos** | Optimiza CPU/RAM, limpieza, auto-scaling |
+32. | 🛡️ **Seguridad** | Firewall UFW, detección de intrusiones, auditorías |
+33. | 📊 **Analytics** | Reportes diarios, predicción de anomalías |
+34. 
+35. ---
+36. 
+37. ## 🚀 Deploy (1 comando)
+38. 
+39. ```bash
+40. # En ubuntu@ecoia — OVHcloud US
+41. git clone https://github.com/liorvys1981-sys/ECO-IA.git /opt/eco-ia
+42. sudo bash /opt/eco-ia/scripts/install.sh
+43. ```
+44. 
+45. ### Post-instalación:
+46. 
+47. ```bash
+48. nano /opt/eco-ia/.env          # 1. Agregar API keys
+49. systemctl start eco-ia         # 2. Arrancar contenedores
+50. bash /opt/eco-ia/scripts/health_check.sh  # 3. Verificar
+51. ```
+52. 
+53. ---
+54. 
+55. ## 🌐 Endpoints
+56. 
+57. | Servicio | URL |
+58. |----------|-----|
+59. | **API** | http://135.148.232.10:8000 |
+60. | **API Docs** | http://135.148.232.10:8000/docs |
+61. | **Grafana** | http://135.148.232.10:3000 |
+62. | **Prometheus** | http://135.148.232.10:9090 |
+63. 
+64. ---
+65. 
+66. ## 📂 Estructura
+67. 
+68. ```
+69. ECO-IA/
+70. ├── agents/
+71. │   ├── orchestrator/    # 🧠 OrchestratorAgent
+72. │   ├── monetization/    # 💰 BillingManager, ClientManager, PricingEngine
+73. │   ├── devops/          # 🔧 AutoHealer, BackupManager, Deployer
+74. │   ├── resources/       # 🌿 ResourceOptimizer, AutoScaler, Cleaner
+75. │   ├── security/        # 🛡️ SecurityAuditor, FirewallManager, IntrusionDetector
+76. │   └── analytics/       # 📊 DashboardData, Predictor, Reporter
+77. ├── core/                # MessageBus, TaskScheduler, LLMConnector, AgentBase
+78. ├── api/                 # FastAPI + middleware + routes
+79. ├── config/              # settings.py, agents.yaml, nginx.conf
+80. ├── docker/              # Dockerfile + docker-compose.yml
+81. ├── monitoring/          # Prometheus + AlertManager
+82. ├── scripts/             # install.sh, health_check.sh, backup.sh
+83. ├── tests/               # test_agents.py + test_api.py
+84. ├── .env.example         # Template OVHcloud
+85. └── requirements.txt
+86. ```
+87. 
+88. ---
+89. 
+90. ## 🐳 Docker
+91. 
+92. ```bash
+93. # Arrancar todo
+94. docker compose -f docker/docker-compose.yml up -d
+95. 
+96. # Estado
+97. docker compose -f docker/docker-compose.yml ps
+98. 
+99. # Logs
+100. docker compose -f docker/docker-compose.yml logs -f eco-ia-api
+101. 
+102. # Parar
+103. docker compose -f docker/docker-compose.yml down
+104. ```
+105. 
+106. ---
+107. 
+108. ## 🧪 Tests
+109. 
+110. ```bash
+111. pip install -r requirements.txt
+112. pytest tests/ -v --cov=.
+113. ```
+114. 
+115. ---
+116. 
+117. ## 🖥️ Servidor
+118. 
+119. - **Provider:** OVHcloud US
+120. - **Modelo:** b3-8 (8GB RAM, 3 vCores, 48GB SSD)
+121. - **OS:** Ubuntu 24.04 LTS
+122. - **IP:** 135.148.232.10
+123. - **Región:** Virginia (US-EAST-VA-1)
+124. - **SSH Key:** caco_eco_ia
+125. 
+126. ---
+127. 
+128. ## 📄 Licencia
+129. 
+130. MIT — libre para uso personal y comercial.
+131. 

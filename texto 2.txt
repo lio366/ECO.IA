@@ -1,0 +1,1 @@
+Agent started in background with agent_id: repo-gap-scan. You'll be notified when it completes. Tell the user you're waiting and end your response, or continue unrelated work until notified. The agent supports multi-turn conversations — use write_agent to send follow-up messages.

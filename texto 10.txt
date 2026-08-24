@@ -1,0 +1,64 @@
+[grep content: 49 matches across 23 file(s) under /home/runner/work/ECO-IA/ECO-IA]
+scaler.py:7: class AutoScaler:
+
+scheduler.py (2 match(es)):
+  7: class ScheduledTask:
+  13: class TaskScheduler:
+processor.py:9: class DataProcessor:
+
+agent_base.py (2 match(es)):
+  1: """Base class for all ECO-IA agents."""
+  9: class AgentBase(ABC):
+intrusion_detector.py:20: class IntrusionDetector:
+orchestrator.py:17: class OrchestratorAgent(AgentBase):
+
+test_api.py (5 match(es)):
+  28: class TestPublicEndpoints:
+  56: class TestAuthentication:
+  98: class TestServiceEndpoints:
+  130: class TestAdminEndpoints:
+  166: class TestWebhookEndpoints:
+predictor.py:12: class Predictor:
+firewall.py:16: class FirewallManager:
+reporter.py:14: class Reporter:
+auditor.py:12: class SecurityAuditor:
+optimizer.py:10: class ResourceOptimizer:
+billing.py:11: class BillingManager:
+dashboard.py:11: class DashboardData:
+
+communication.py (2 match(es)):
+  9: class Message:
+  23: class MessageBus:
+manager.py:43: class HostingManager:
+cleaner.py:15: class Cleaner:
+
+models.py (7 match(es)):
+  14: class PlanEnum(str, enum.Enum):
+  20: class Client(Base):
+  42: class Invoice(Base):
+  59: class APIUsage(Base):
+  74: class SystemMetric(Base):
+  87: class SecurityAlert(Base):
+  101: class AgentEvent(Base):
+llm_connector.py:6: class LLMConnector:
+
+clients.py (2 match(es)):
+  12: class Client:
+  49: class ClientManager:
+
+test_agents.py (13 match(es)):
+  38: class TestMessageBus:
+  83: class TestTaskScheduler:
+  113: class TestLLMConnector:
+  139: class TestClientManager:
+  183: class TestPricingEngine:
+  227: class TestBillingManager:
+  250: class TestBackupManager:
+  274: class TestResourceOptimizer:
+  298: class TestFirewallManager:
+  328: class TestIntrusionDetector:
+  350: class TestPredictor:
+  390: class TestDashboardData:
+  425: class TestReporter:
+pricing.py:35: class PricingEngine:
+completion.py:20: class AICompletionService:
