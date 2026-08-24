@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  eco-ia-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: eco-ia-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - eco-ia-net
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: eco-ia-redis
+    restart: unless-stopped
+    networks:
+      - eco-ia-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: eco-ia-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - eco-ia-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: eco-ia-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - eco-ia-net
+
+networks:
+  eco-ia-net:
+    driver: bridge
+
+volumes:
+  grafana-storage:
