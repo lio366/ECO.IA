@@ -52,8 +52,8 @@ class LLMConnector:
     async def _openai_chat(self, messages: list[dict[str, str]]) -> str:
         try:
             import openai
-        except ImportError:
-            return "[OpenAI not installed]"
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for OpenAI provider") from exc
 
         try:
             client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
@@ -71,8 +71,8 @@ class LLMConnector:
     async def _ollama_chat(self, messages: list[dict[str, str]]) -> str:
         try:
             import httpx
-        except ImportError:
-            return "[httpx not installed]"
+        except ImportError as exc:
+            raise RuntimeError("httpx package is required for Ollama provider") from exc
 
         try:
             async with httpx.AsyncClient(timeout=120) as client:
