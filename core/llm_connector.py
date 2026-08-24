@@ -23,7 +23,9 @@ class LLMConnector:
 
         if self.provider == "openai":
             self.model = model or "gpt-4o-mini"
-            self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY is required when provider is 'openai'")
             self.base_url = base_url or "https://api.openai.com/v1"
         elif self.provider == "ollama":
             self.model = model or "llama3"
@@ -50,7 +52,10 @@ class LLMConnector:
     async def _openai_chat(self, messages: list[dict[str, str]]) -> str:
         try:
             import openai
+        except ImportError:
+            return "[OpenAI not installed]"
 
+        try:
             client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
             response = await client.chat.completions.create(
                 model=self.model,
@@ -59,8 +64,6 @@ class LLMConnector:
                 max_tokens=self.max_tokens,
             )
             return response.choices[0].message.content or ""
-        except ImportError:
-            return "[OpenAI not installed]"
         except Exception as exc:  # noqa: BLE001
             logger.error("OpenAI error: %s", exc)
             raise
@@ -68,7 +71,10 @@ class LLMConnector:
     async def _ollama_chat(self, messages: list[dict[str, str]]) -> str:
         try:
             import httpx
+        except ImportError:
+            return "[httpx not installed]"
 
+        try:
             async with httpx.AsyncClient(timeout=120) as client:
                 response = await client.post(
                     f"{self.base_url}/api/chat",
@@ -84,8 +90,6 @@ class LLMConnector:
                 )
                 response.raise_for_status()
                 return response.json().get("message", {}).get("content", "")
-        except ImportError:
-            return "[httpx not installed]"
         except Exception as exc:  # noqa: BLE001
             logger.error("Ollama error: %s", exc)
             raise
