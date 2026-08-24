@@ -1,0 +1,176 @@
+# ECO-IA Docker Compose — OVHcloud US b3-8 | 135.148.232.10
+x-common-env: &common-env
+  env_file:
+    - ../.env
+
+networks:
+  eco-ia-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+  eco-ia-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: eco-ia-api
+    restart: always
+    <<: *common-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eco-ia-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  eco-ia-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: eco-ia-worker
+    command: celery -A core.celery_app worker --loglevel=info --concurrency=4
+    restart: always
+    <<: *common-env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - eco-ia-net
+
+  eco-ia-beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: eco-ia-beat
+    command: celery -A core.celery_app beat --loglevel=info
+    restart: always
+    <<: *common-env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - eco-ia-net
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: eco-ia-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: eco_ia
+      POSTGRES_USER: eco_ia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eco_ia_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - eco-ia-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eco_ia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: eco-ia-redis
+    restart: always
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - eco-ia-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    container_name: eco-ia-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - eco-ia-api
+    networks:
+      - eco-ia-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: eco-ia-prometheus
+    restart: always
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    networks:
+      - eco-ia-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: eco-ia-grafana
+    restart: always
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-change-me}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - eco-ia-net
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: eco-ia-alertmanager
+    restart: always
+    ports:
+      - "9093:9093"
+    volumes:
+      - ../monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/config.yml
+    networks:
+      - eco-ia-net
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: eco-ia-node-exporter
+    restart: always
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    networks:
+      - eco-ia-net
