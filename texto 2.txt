@@ -1,3 +1,50 @@
-$ ls -la /home/runner/work/ECO-IA/ECO-IA/*.py | wc -l
-29
-<shellId: 3 completed with exit code 0>
+1. """Security auditor - runs periodic security checks and generates reports."""
+2. 
+3. import logging
+4. import subprocess
+5. from datetime import datetime
+6. from typing import Any, Dict, List
+7. 
+8. 
+9. logger = logging.getLogger(__name__)
+10. 
+11. 
+12. class SecurityAuditor:
+13.     """Performs periodic security audits on the server."""
+14. 
+15.     def __init__(self) -> None:
+16.         self._audit_history: List[Dict[str, Any]] = []
+17. 
+18.     # ------------------------------------------------------------------
+19.     # Audit checks
+20.     # ------------------------------------------------------------------
+21. 
+22.     def check_open_ports(self) -> Dict[str, Any]:
+23.         """List open ports using ss."""
+24.         result = subprocess.run(  # noqa: S603
+25.             ["ss", "-tlnp"],
+26.             capture_output=True,
+27.             text=True,
+28.             check=False,
+29.         )
+30.         return {
+31.             "check": "open_ports",
+32.             "output": result.stdout,
+33.             "success": result.returncode == 0,
+34.             "timestamp": datetime.utcnow().isoformat(),
+35.         }
+36. 
+37.     def check_failed_logins(self) -> Dict[str, Any]:
+38.         """Count failed login attempts in the last 24 hours using journalctl."""
+39.         result = subprocess.run(  # noqa: S603
+40.             ["journalctl", "-u", "ssh", "--since", "24 hours ago", "--no-pager", "-q"],
+41.             capture_output=True,
+42.             text=True,
+43.             check=False,
+44.         )
+45.         lines = result.stdout.splitlines() if result.stdout else []
+46.         failed = [l for l in lines if "Failed" in l or "Invalid" in l]  # noqa: E741
+47.         return {
+48.             "check": "failed_logins",
+49.             "count": len(failed),
+50.             "severity": "high" if len(failed) > 50 else "low",

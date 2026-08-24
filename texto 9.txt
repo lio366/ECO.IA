@@ -1,92 +1,103 @@
-1. """Resource optimiser - monitors and optimises CPU/RAM usage."""
-2. 
-3. import logging
-4. from typing import Any, Dict, Optional
+1. """Data processing service — transforms and analyzes data payloads."""
+2. import logging
+3. import json
+4. from typing import Any, Dict, List
 5. 
-6. 
-7. logger = logging.getLogger(__name__)
+6. logger = logging.getLogger(__name__)
+7. 
 8. 
-9. 
-10. class ResourceOptimizer:
-11.     """Monitors system resource usage and applies optimisations."""
-12. 
-13.     def __init__(self, cpu_threshold: float = 85.0, ram_threshold: float = 90.0) -> None:
-14.         self.cpu_threshold = cpu_threshold
-15.         self.ram_threshold = ram_threshold
+9. class DataProcessor:
+10.     """Processes data payloads with various operations."""
+11. 
+12.     SUPPORTED_OPERATIONS = [
+13.         "summarize", "classify", "extract", "transform",
+14.         "validate", "aggregate", "filter", "sort",
+15.     ]
 16. 
-17.     # ------------------------------------------------------------------
-18.     # Metrics
-19.     # ------------------------------------------------------------------
-20. 
-21.     def get_metrics(self) -> Dict[str, Any]:
-22.         """Return current CPU, RAM, and disk metrics."""
-23.         try:
-24.             import psutil  # type: ignore[import]
-25. 
-26.             cpu_pct = psutil.cpu_percent(interval=1)
-27.             ram = psutil.virtual_memory()
-28.             disk = psutil.disk_usage("/")
-29.             net = psutil.net_io_counters()
-30.             return {
-31.                 "cpu_percent": cpu_pct,
-32.                 "ram_percent": ram.percent,
-33.                 "ram_used_gb": round(ram.used / 1024**3, 2),
-34.                 "ram_total_gb": round(ram.total / 1024**3, 2),
-35.                 "disk_percent": disk.percent,
-36.                 "disk_used_gb": round(disk.used / 1024**3, 2),
-37.                 "disk_total_gb": round(disk.total / 1024**3, 2),
-38.                 "net_bytes_sent_mb": round(net.bytes_sent / 1024**2, 2),
-39.                 "net_bytes_recv_mb": round(net.bytes_recv / 1024**2, 2),
-40.             }
-41.         except ImportError:
-42.             logger.warning("psutil not installed; returning simulated metrics.")
-43.             return self._simulate_metrics()
-44. 
-45.     def _simulate_metrics(self) -> Dict[str, Any]:
-46.         import random
-47. 
-48.         return {
-49.             "cpu_percent": round(random.uniform(10, 60), 1),
-50.             "ram_percent": round(random.uniform(30, 70), 1),
-51.             "ram_used_gb": round(random.uniform(1, 6), 2),
-52.             "ram_total_gb": 8.0,
-53.             "disk_percent": round(random.uniform(20, 50), 1),
-54.             "disk_used_gb": round(random.uniform(20, 80), 2),
-55.             "disk_total_gb": 160.0,
-56.             "net_bytes_sent_mb": round(random.uniform(100, 5000), 2),
-57.             "net_bytes_recv_mb": round(random.uniform(100, 5000), 2),
-58.         }
-59. 
-60.     # ------------------------------------------------------------------
-61.     # Analysis
-62.     # ------------------------------------------------------------------
-63. 
-64.     def analyse(self) -> Dict[str, Any]:
-65.         """Analyse current resource usage and return recommendations."""
-66.         metrics = self.get_metrics()
-67.         recommendations = []
-68. 
-69.         if metrics["cpu_percent"] > self.cpu_threshold:
-70.             recommendations.append(
-71.                 f"CPU usage is high ({metrics['cpu_percent']}%). Consider scaling up or optimising workloads."
-72.             )
-73.         if metrics["ram_percent"] > self.ram_threshold:
-74.             recommendations.append(
-75.                 f"RAM usage is high ({metrics['ram_percent']}%). Consider adding swap or scaling RAM."
-76.             )
-77.         if metrics["disk_percent"] > 80:
-78.             recommendations.append(
-79.                 f"Disk usage is high ({metrics['disk_percent']}%). Run cleanup or expand storage."
-80.             )
-81. 
-82.         return {
-83.             "metrics": metrics,
-84.             "status": "warning" if recommendations else "healthy",
-85.             "recommendations": recommendations,
-86.         }
-87. 
-88.     def is_under_pressure(self) -> bool:
-89.         """Return True if the system is under resource pressure."""
-90.         metrics = self.get_metrics()
-91.         return metrics["cpu_percent"] > self.cpu_threshold or metrics["ram_percent"] > self.ram_threshold
-92. 
+17.     async def process(
+18.         self,
+19.         data: Any,
+20.         operation: str,
+21.         options: Dict[str, Any] = None,
+22.     ) -> Dict[str, Any]:
+23.         """Process data with the given operation."""
+24.         if operation not in self.SUPPORTED_OPERATIONS:
+25.             return {
+26.                 "status": "error",
+27.                 "message": f"Unsupported operation: {operation}. "
+28.                            f"Supported: {self.SUPPORTED_OPERATIONS}",
+29.             }
+30. 
+31.         options = options or {}
+32.         handler = getattr(self, f"_op_{operation}", self._op_default)
+33.         result = await handler(data, options)
+34. 
+35.         logger.info("DataProcessor: op=%s input_type=%s", operation, type(data).__name__)
+36.         return {
+37.             "status": "processed",
+38.             "operation": operation,
+39.             "input_type": type(data).__name__,
+40.             "result": result,
+41.         }
+42. 
+43.     async def _op_summarize(self, data: Any, opts: Dict) -> str:
+44.         if isinstance(data, dict):
+45.             return f"Dict with {len(data)} keys: {list(data.keys())[:5]}"
+46.         if isinstance(data, list):
+47.             return f"List with {len(data)} items"
+48.         return str(data)[:200]
+49. 
+50.     async def _op_classify(self, data: Any, opts: Dict) -> Dict:
+51.         return {"type": type(data).__name__, "size": len(str(data))}
+52. 
+53.     async def _op_extract(self, data: Any, opts: Dict) -> Any:
+54.         fields = opts.get("fields", [])
+55.         if isinstance(data, dict) and fields:
+56.             return {k: data.get(k) for k in fields}
+57.         return data
+58. 
+59.     async def _op_transform(self, data: Any, opts: Dict) -> Any:
+60.         fmt = opts.get("format", "json")
+61.         if fmt == "json":
+62.             return json.loads(json.dumps(data, default=str))
+63.         return str(data)
+64. 
+65.     async def _op_validate(self, data: Any, opts: Dict) -> Dict:
+66.         schema = opts.get("schema", {})
+67.         errors = []
+68.         if schema and isinstance(data, dict):
+69.             for field, typ in schema.items():
+70.                 if field not in data:
+71.                     errors.append(f"Missing field: {field}")
+72.         return {"valid": len(errors) == 0, "errors": errors}
+73. 
+74.     async def _op_aggregate(self, data: Any, opts: Dict) -> Any:
+75.         if isinstance(data, list) and all(isinstance(x, (int, float)) for x in data):
+76.             return {
+77.                 "count": len(data), "sum": sum(data),
+78.                 "min": min(data), "max": max(data),
+79.                 "avg": sum(data) / len(data) if data else 0,
+80.             }
+81.         return {"count": len(data) if hasattr(data, "__len__") else 1}
+82. 
+83.     async def _op_filter(self, data: Any, opts: Dict) -> Any:
+84.         condition = opts.get("condition", {})
+85.         if isinstance(data, list) and condition:
+86.             key = condition.get("key")
+87.             value = condition.get("value")
+88.             if key:
+89.                 return [item for item in data if isinstance(item, dict) and item.get(key) == value]
+90.         return data
+91. 
+92.     async def _op_sort(self, data: Any, opts: Dict) -> Any:
+93.         if isinstance(data, list):
+94.             key = opts.get("key")
+95.             reverse = opts.get("reverse", False)
+96.             if key:
+97.                 return sorted(data, key=lambda x: x.get(key, 0) if isinstance(x, dict) else x, reverse=reverse)
+98.             return sorted(data, reverse=reverse)
+99.         return data
+100. 
+101.     async def _op_default(self, data: Any, opts: Dict) -> Any:
+102.         return data
+103. 

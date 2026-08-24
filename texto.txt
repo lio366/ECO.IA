@@ -1,5 +1,50 @@
-$ find /home/runner/work/ECO-IA/ECO-IA -type f -name "*.py" | grep -E "(agent|orchestrator|monetization|devops|resources|security|analytics)" | head -20
-/home/runner/work/ECO-IA/ECO-IA/test_agents.py
-/home/runner/work/ECO-IA/ECO-IA/orchestrator.py
-/home/runner/work/ECO-IA/ECO-IA/agent_base.py
-<shellId: 2 completed with exit code 0>
+1. """Intrusion detector - analyses logs for suspicious activity."""
+2. 
+3. import logging
+4. import re
+5. from collections import Counter
+6. from datetime import datetime, timedelta
+7. from pathlib import Path
+8. from typing import Any, Dict, List, Optional
+9. 
+10. 
+11. logger = logging.getLogger(__name__)
+12. 
+13. # Common brute-force pattern in auth logs
+14. _FAILED_SSH_RE = re.compile(r"Failed password for .+ from (\d+\.\d+\.\d+\.\d+)")
+15. _INVALID_USER_RE = re.compile(r"Invalid user \S+ from (\d+\.\d+\.\d+\.\d+)")
+16. _PORT_SCAN_THRESHOLD = 20       # unique ports in 1 minute → likely scan
+17. _BRUTE_FORCE_THRESHOLD = 10     # failed logins from single IP → brute force
+18. 
+19. 
+20. class IntrusionDetector:
+21.     """Analyses system logs to detect and report intrusion attempts."""
+22. 
+23.     def __init__(
+24.         self,
+25.         auth_log_path: str = "/var/log/auth.log",
+26.         threshold_minutes: int = 5,
+27.         brute_force_threshold: int = _BRUTE_FORCE_THRESHOLD,
+28.     ) -> None:
+29.         self.auth_log_path = auth_log_path
+30.         self.threshold_minutes = threshold_minutes
+31.         self.brute_force_threshold = brute_force_threshold
+32.         self._alerts: List[Dict[str, Any]] = []
+33.         self._blocked_ips: List[str] = []
+34. 
+35.     # ------------------------------------------------------------------
+36.     # Log analysis
+37.     # ------------------------------------------------------------------
+38. 
+39.     def analyse_auth_log(self) -> List[Dict[str, Any]]:
+40.         """Parse auth.log and return detected threats."""
+41.         threats = []
+42.         log_path = Path(self.auth_log_path)
+43.         if not log_path.exists():
+44.             logger.warning("Auth log not found at '%s'. Skipping.", self.auth_log_path)
+45.             return []
+46. 
+47.         ip_fail_counts: Counter = Counter()
+48.         try:
+49.             with log_path.open(errors="replace") as fh:
+50.                 for line in fh:

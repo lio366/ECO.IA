@@ -1,110 +1,108 @@
-1. """Dynamic pricing engine for ECO-IA services."""
+1. """Reporter - generates automated reports and sends email alerts."""
 2. 
 3. import logging
-4. from typing import Any, Dict, List, Optional
-5. 
-6. 
-7. logger = logging.getLogger(__name__)
-8. 
+4. import smtplib
+5. from datetime import datetime
+6. from email.mime.multipart import MIMEMultipart
+7. from email.mime.text import MIMEText
+8. from typing import Any, Dict, List, Optional
 9. 
-10. PLANS: Dict[str, Dict[str, Any]] = {
-11.     "basic": {
-12.         "name": "Basic",
-13.         "base_price_usd": 9.99,
-14.         "api_calls_per_month": 10_000,
-15.         "storage_gb": 10,
-16.         "support": "community",
-17.     },
-18.     "pro": {
-19.         "name": "Pro",
-20.         "base_price_usd": 49.99,
-21.         "api_calls_per_month": 100_000,
-22.         "storage_gb": 100,
-23.         "support": "email",
-24.     },
-25.     "enterprise": {
-26.         "name": "Enterprise",
-27.         "base_price_usd": 199.99,
-28.         "api_calls_per_month": 1_000_000,
-29.         "storage_gb": 1_000,
-30.         "support": "dedicated",
-31.     },
-32. }
+10. 
+11. logger = logging.getLogger(__name__)
+12. 
+13. 
+14. class Reporter:
+15.     """Generates and distributes automated system reports."""
+16. 
+17.     def __init__(
+18.         self,
+19.         smtp_host: Optional[str] = None,
+20.         smtp_port: int = 587,
+21.         smtp_user: Optional[str] = None,
+22.         smtp_password: Optional[str] = None,
+23.         from_email: Optional[str] = None,
+24.         to_emails: Optional[List[str]] = None,
+25.     ) -> None:
+26.         self.smtp_host = smtp_host
+27.         self.smtp_port = smtp_port
+28.         self.smtp_user = smtp_user
+29.         self.smtp_password = smtp_password
+30.         self.from_email = from_email or smtp_user
+31.         self.to_emails = to_emails or []
+32.         self._reports: List[Dict[str, Any]] = []
 33. 
-34. 
-35. class PricingEngine:
-36.     """Computes dynamic pricing based on demand and resource usage."""
+34.     # ------------------------------------------------------------------
+35.     # Report generation
+36.     # ------------------------------------------------------------------
 37. 
-38.     def __init__(self, demand_multiplier: float = 1.0) -> None:
-39.         self._demand_multiplier = demand_multiplier
-40.         self._plans = dict(PLANS)
-41. 
-42.     # ------------------------------------------------------------------
-43.     # Price calculation
-44.     # ------------------------------------------------------------------
-45. 
-46.     def get_price(self, plan: str, usage_pct: float = 0.0) -> float:
-47.         """Calculate the current price for *plan* considering demand.
-48. 
-49.         Args:
-50.             plan: Plan name ("basic", "pro", "enterprise").
-51.             usage_pct: Current server utilisation percentage (0–100).
-52. 
-53.         Returns:
-54.             Adjusted price in USD.
-55.         """
-56.         plan_config = self._plans.get(plan)
-57.         if plan_config is None:
-58.             raise ValueError(f"Unknown plan: {plan!r}")
-59. 
-60.         base = plan_config["base_price_usd"]
-61.         demand_factor = self._compute_demand_factor(usage_pct)
-62.         price = round(base * self._demand_multiplier * demand_factor, 2)
-63.         logger.debug("Price for '%s': base=%.2f demand_factor=%.2f → %.2f", plan, base, demand_factor, price)
-64.         return price
-65. 
-66.     def _compute_demand_factor(self, usage_pct: float) -> float:
-67.         """Return a multiplier based on server utilisation."""
-68.         if usage_pct < 50:
-69.             return 1.0          # normal pricing
-70.         if usage_pct < 75:
-71.             return 1.1          # slight surge
-72.         if usage_pct < 90:
-73.             return 1.25         # surge pricing
-74.         return 1.5              # peak pricing
-75. 
-76.     # ------------------------------------------------------------------
-77.     # Plan management
-78.     # ------------------------------------------------------------------
-79. 
-80.     def list_plans(self) -> List[Dict[str, Any]]:
-81.         """Return all available plans with current prices."""
-82.         return [
-83.             {**v, "plan_key": k, "current_price_usd": self.get_price(k)}
-84.             for k, v in self._plans.items()
-85.         ]
-86. 
-87.     def recommend_plan(self, monthly_api_calls: int, storage_gb: int) -> str:
-88.         """Recommend the cheapest plan that covers the given requirements."""
-89.         for plan_key in ("basic", "pro", "enterprise"):
-90.             plan = self._plans[plan_key]
-91.             if (
-92.                 plan["api_calls_per_month"] >= monthly_api_calls
-93.                 and plan["storage_gb"] >= storage_gb
-94.             ):
-95.                 return plan_key
-96.         return "enterprise"
+38.     def generate_daily_report(self, data: Dict[str, Any]) -> Dict[str, Any]:
+39.         """Generate a structured daily report from *data*."""
+40.         report = {
+41.             "type": "daily",
+42.             "generated_at": datetime.utcnow().isoformat(),
+43.             "summary": self._build_summary(data),
+44.             "data": data,
+45.         }
+46.         self._reports.append(report)
+47.         logger.info("Daily report generated.")
+48.         return report
+49. 
+50.     def generate_alert_report(self, alert: Dict[str, Any]) -> Dict[str, Any]:
+51.         """Generate an alert report for a critical event."""
+52.         report = {
+53.             "type": "alert",
+54.             "generated_at": datetime.utcnow().isoformat(),
+55.             "alert": alert,
+56.         }
+57.         self._reports.append(report)
+58.         logger.warning("Alert report generated: %s", alert.get("message"))
+59.         return report
+60. 
+61.     def _build_summary(self, data: Dict[str, Any]) -> str:
+62.         lines = ["ECO-IA Daily Report", "=" * 40]
+63.         for key, value in data.items():
+64.             lines.append(f"{key}: {value}")
+65.         return "\n".join(lines)
+66. 
+67.     # ------------------------------------------------------------------
+68.     # Email delivery
+69.     # ------------------------------------------------------------------
+70. 
+71.     def send_email(self, subject: str, body: str, to: Optional[List[str]] = None) -> bool:
+72.         """Send an email report. Returns True on success."""
+73.         recipients = to or self.to_emails
+74.         if not recipients or not self.smtp_host:
+75.             logger.warning("Email not configured; skipping send.")
+76.             return False
+77. 
+78.         try:
+79.             msg = MIMEMultipart("alternative")
+80.             msg["Subject"] = subject
+81.             msg["From"] = self.from_email or ""
+82.             msg["To"] = ", ".join(recipients)
+83.             msg.attach(MIMEText(body, "plain", "utf-8"))
+84. 
+85.             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+86.                 server.ehlo()
+87.                 server.starttls()
+88.                 if self.smtp_user and self.smtp_password:
+89.                     server.login(self.smtp_user, self.smtp_password)
+90.                 server.sendmail(self.from_email or "", recipients, msg.as_string())
+91. 
+92.             logger.info("Email sent to %s.", recipients)
+93.             return True
+94.         except Exception as exc:  # noqa: BLE001
+95.             logger.error("Failed to send email: %s", exc)
+96.             return False
 97. 
-98.     def set_demand_multiplier(self, multiplier: float) -> None:
-99.         """Override the global demand multiplier (1.0 = normal)."""
-100.         if multiplier <= 0:
-101.             raise ValueError("Demand multiplier must be positive.")
-102.         self._demand_multiplier = multiplier
-103.         logger.info("Demand multiplier set to %.2f", multiplier)
-104. 
-105.     def get_pricing_summary(self) -> Dict[str, Any]:
-106.         return {
-107.             "demand_multiplier": self._demand_multiplier,
-108.             "plans": self.list_plans(),
-109.         }
-110. 
+98.     def send_daily_report_email(self, data: Dict[str, Any]) -> bool:
+99.         report = self.generate_daily_report(data)
+100.         subject = f"ECO-IA Daily Report – {datetime.utcnow().strftime('%Y-%m-%d')}"
+101.         return self.send_email(subject, report["summary"])
+102. 
+103.     def get_reports(self, report_type: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+104.         reports = self._reports
+105.         if report_type:
+106.             reports = [r for r in reports if r.get("type") == report_type]
+107.         return reports[-limit:]
+108. 

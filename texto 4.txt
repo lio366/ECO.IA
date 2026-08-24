@@ -1,42 +1,31 @@
-1. """Task scheduler for ECO-IA agents."""
-2. import asyncio, logging
-3. from datetime import datetime
-4. from typing import Any, Callable, Coroutine, Dict, List, Optional
-5. logger = logging.getLogger(__name__)
-6. 
-7. class ScheduledTask:
-8.     def __init__(self, task_id, func, interval_seconds, description=""):
-9.         self.task_id = task_id; self.func = func
-10.         self.interval_seconds = interval_seconds; self.description = description
-11.         self.last_run = None; self.run_count = 0; self.error_count = 0; self._task = None
-12. 
-13. class TaskScheduler:
-14.     def __init__(self): self._tasks: Dict[str, ScheduledTask] = {}; self._running = False
-15.     def register(self, task_id, func, interval_seconds, description=""):
-16.         t = ScheduledTask(task_id, func, interval_seconds, description)
-17.         self._tasks[task_id] = t; return t
-18.     def unregister(self, task_id):
-19.         t = self._tasks.pop(task_id, None)
-20.         if t and t._task: t._task.cancel()
-21.         return t is not None
-22.     async def start(self):
-23.         self._running = True
-24.         for t in self._tasks.values(): t._task = asyncio.create_task(self._run_loop(t))
-25.     async def stop(self):
-26.         self._running = False
-27.         for t in self._tasks.values():
-28.             if t._task: t._task.cancel()
-29.     async def _run_loop(self, s):
-30.         while self._running:
-31.             await asyncio.sleep(s.interval_seconds)
-32.             try:
-33.                 await s.func(); s.last_run = datetime.utcnow(); s.run_count += 1
-34.             except asyncio.CancelledError: break
-35.             except Exception as e: s.error_count += 1; logger.error("Task '%s' error: %s", s.task_id, e)
-36.     def list_tasks(self):
-37.         return [{"task_id": t.task_id, "description": t.description,
-38.                  "interval_seconds": t.interval_seconds,
-39.                  "last_run": t.last_run.isoformat() if t.last_run else None,
-40.                  "run_count": t.run_count, "error_count": t.error_count}
-41.                 for t in self._tasks.values()]
-42. 
+$ ls -la /home/runner/work/ECO-IA/ECO-IA/ | grep -E "\.py$"
+-rw-rw-r-- 1 runner runner   200 Aug 15 07:02 __init__.py
+-rw-rw-r-- 1 runner runner  2166 Aug 15 07:02 agent_base.py
+-rw-rw-r-- 1 runner runner  3914 Aug 15 07:02 auditor.py
+-rw-rw-r-- 1 runner runner  5474 Aug 15 07:02 billing.py
+-rw-rw-r-- 1 runner runner  1822 Aug 15 07:02 celery_app.py
+-rw-rw-r-- 1 runner runner  4657 Aug 15 07:02 cleaner.py
+-rw-rw-r-- 1 runner runner  5035 Aug 15 07:02 clients.py
+-rw-rw-r-- 1 runner runner  2073 Aug 15 07:02 communication.py
+-rw-rw-r-- 1 runner runner  2535 Aug 15 07:02 completion.py
+-rw-rw-r-- 1 runner runner   766 Aug 15 07:02 connection.py
+-rw-rw-r-- 1 runner runner  5802 Aug 15 07:02 crud.py
+-rw-rw-r-- 1 runner runner  2536 Aug 15 07:02 dashboard.py
+-rw-rw-r-- 1 runner runner  2952 Aug 15 07:02 firewall.py
+-rw-rw-r-- 1 runner runner  3699 Aug 15 07:02 intrusion_detector.py
+-rw-rw-r-- 1 runner runner  2637 Aug 15 07:02 llm_connector.py
+-rw-rw-r-- 1 runner runner  4199 Aug 15 07:02 main.py
+-rw-rw-r-- 1 runner runner  3008 Aug 15 07:02 manager.py
+-rw-rw-r-- 1 runner runner  4212 Aug 15 07:02 models.py
+-rw-rw-r-- 1 runner runner  3659 Aug 15 07:02 optimizer.py
+-rw-rw-r-- 1 runner runner  8593 Aug 15 07:02 orchestrator.py
+-rw-rw-r-- 1 runner runner  3746 Aug 15 07:02 predictor.py
+-rw-rw-r-- 1 runner runner  3756 Aug 15 07:02 pricing.py
+-rw-rw-r-- 1 runner runner  3789 Aug 15 07:02 processor.py
+-rw-rw-r-- 1 runner runner  4063 Aug 15 07:02 reporter.py
+-rw-rw-r-- 1 runner runner  2573 Aug 15 07:02 scaler.py
+-rw-rw-r-- 1 runner runner  1958 Aug 15 07:02 scheduler.py
+-rw-rw-r-- 1 runner runner  2637 Aug 15 07:02 settings.py
+-rw-rw-r-- 1 runner runner 19732 Aug 15 07:02 test_agents.py
+-rw-rw-r-- 1 runner runner  8472 Aug 15 07:02 test_api.py
+<shellId: 4 completed with exit code 0>

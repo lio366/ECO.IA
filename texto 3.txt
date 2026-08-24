@@ -1,50 +1,50 @@
-1. """Client management for the monetization agent."""
+1. """Reporter - generates automated reports and sends email alerts."""
 2. 
 3. import logging
-4. import uuid
+4. import smtplib
 5. from datetime import datetime
-6. from typing import Any, Dict, List, Optional
-7. 
-8. 
-9. logger = logging.getLogger(__name__)
+6. from email.mime.multipart import MIMEMultipart
+7. from email.mime.text import MIMEText
+8. from typing import Any, Dict, List, Optional
+9. 
 10. 
-11. 
-12. class Client:
-13.     """Represents a paying client of the ECO-IA system."""
-14. 
-15.     def __init__(
-16.         self,
-17.         client_id: str,
-18.         name: str,
-19.         email: str,
-20.         plan: str = "basic",
-21.         stripe_customer_id: Optional[str] = None,
-22.     ) -> None:
-23.         self.client_id = client_id
-24.         self.name = name
-25.         self.email = email
-26.         self.plan = plan
-27.         self.stripe_customer_id = stripe_customer_id
-28.         self.created_at = datetime.utcnow()
-29.         self.last_activity: Optional[datetime] = None
-30.         self.is_active = True
-31.         self.monthly_spend: float = 0.0
-32.         self.upsell_opportunities: List[str] = []
+11. logger = logging.getLogger(__name__)
+12. 
+13. 
+14. class Reporter:
+15.     """Generates and distributes automated system reports."""
+16. 
+17.     def __init__(
+18.         self,
+19.         smtp_host: Optional[str] = None,
+20.         smtp_port: int = 587,
+21.         smtp_user: Optional[str] = None,
+22.         smtp_password: Optional[str] = None,
+23.         from_email: Optional[str] = None,
+24.         to_emails: Optional[List[str]] = None,
+25.     ) -> None:
+26.         self.smtp_host = smtp_host
+27.         self.smtp_port = smtp_port
+28.         self.smtp_user = smtp_user
+29.         self.smtp_password = smtp_password
+30.         self.from_email = from_email or smtp_user
+31.         self.to_emails = to_emails or []
+32.         self._reports: List[Dict[str, Any]] = []
 33. 
-34.     def to_dict(self) -> Dict[str, Any]:
-35.         return {
-36.             "client_id": self.client_id,
-37.             "name": self.name,
-38.             "email": self.email,
-39.             "plan": self.plan,
-40.             "stripe_customer_id": self.stripe_customer_id,
-41.             "created_at": self.created_at.isoformat(),
-42.             "last_activity": self.last_activity.isoformat() if self.last_activity else None,
-43.             "is_active": self.is_active,
-44.             "monthly_spend": self.monthly_spend,
-45.             "upsell_opportunities": self.upsell_opportunities,
-46.         }
-47. 
-48. 
-49. class ClientManager:
-50.     """Manages the lifecycle of ECO-IA clients."""
+34.     # ------------------------------------------------------------------
+35.     # Report generation
+36.     # ------------------------------------------------------------------
+37. 
+38.     def generate_daily_report(self, data: Dict[str, Any]) -> Dict[str, Any]:
+39.         """Generate a structured daily report from *data*."""
+40.         report = {
+41.             "type": "daily",
+42.             "generated_at": datetime.utcnow().isoformat(),
+43.             "summary": self._build_summary(data),
+44.             "data": data,
+45.         }
+46.         self._reports.append(report)
+47.         logger.info("Daily report generated.")
+48.         return report
+49. 
+50.     def generate_alert_report(self, alert: Dict[str, Any]) -> Dict[str, Any]:

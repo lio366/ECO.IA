@@ -1,46 +1,45 @@
-1. """LLM connector supporting OpenAI and Ollama."""
-2. import logging, os
-3. from typing import Any, Dict, List, Optional
-4. logger = logging.getLogger(__name__)
-5. 
-6. class LLMConnector:
-7.     def __init__(self, provider="openai", model=None, api_key=None, base_url=None,
-8.                  temperature=0.7, max_tokens=2048):
-9.         self.provider = provider.lower(); self.temperature = temperature; self.max_tokens = max_tokens
-10.         if self.provider == "openai":
-11.             self.model = model or "gpt-4o-mini"
-12.             self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-13.             self.base_url = base_url or "https://api.openai.com/v1"
-14.         elif self.provider == "ollama":
-15.             self.model = model or "llama3"; self.api_key = "ollama"
-16.             self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-17.         else:
-18.             raise ValueError(f"Unsupported provider: {provider!r}")
-19.     async def chat(self, messages, system_prompt=None):
-20.         if system_prompt: messages = [{"role": "system", "content": system_prompt}] + list(messages)
-21.         return await self._openai_chat(messages) if self.provider == "openai" else await self._ollama_chat(messages)
-22.     async def complete(self, prompt):
-23.         return await self.chat([{"role": "user", "content": prompt}])
-24.     async def _openai_chat(self, messages):
-25.         try:
-26.             import openai
-27.             client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-28.             r = await client.chat.completions.create(model=self.model, messages=messages,
-29.                 temperature=self.temperature, max_tokens=self.max_tokens)
-30.             return r.choices[0].message.content or ""
-31.         except ImportError: return "[OpenAI not installed]"
-32.         except Exception as e: logger.error("OpenAI error: %s", e); raise
-33.     async def _ollama_chat(self, messages):
-34.         try:
-35.             import httpx
-36.             async with httpx.AsyncClient(timeout=120) as c:
-37.                 r = await c.post(f"{self.base_url}/api/chat",
-38.                     json={"model": self.model, "messages": messages, "stream": False,
-39.                           "options": {"temperature": self.temperature, "num_predict": self.max_tokens}})
-40.                 r.raise_for_status(); return r.json().get("message", {}).get("content", "")
-41.         except ImportError: return "[httpx not installed]"
-42.         except Exception as e: logger.error("Ollama error: %s", e); raise
-43.     def get_info(self):
-44.         return {"provider": self.provider, "model": self.model, "base_url": self.base_url,
-45.                 "temperature": self.temperature, "max_tokens": self.max_tokens}
-46. 
+1. """Auto-scaler - adjusts Docker service replicas based on load."""
+2. import logging, subprocess
+3. from datetime import datetime
+4. from typing import Any, Dict, List
+5. logger = logging.getLogger(__name__)
+6. 
+7. class AutoScaler:
+8.     def __init__(self, compose_file="docker/docker-compose.yml",
+9.                  min_replicas=1, max_replicas=10,
+10.                  scale_up_cpu_threshold=70.0, scale_down_cpu_threshold=30.0):
+11.         self.compose_file = compose_file
+12.         self.min_replicas = min_replicas; self.max_replicas = max_replicas
+13.         self.scale_up_cpu_threshold = scale_up_cpu_threshold
+14.         self.scale_down_cpu_threshold = scale_down_cpu_threshold
+15.         self._current_replicas: Dict[str, int] = {}
+16.         self._scale_events: List[Dict[str, Any]] = []
+17. 
+18.     def evaluate_and_scale(self, service: str, cpu_percent: float) -> Dict[str, Any]:
+19.         current = self._current_replicas.get(service, 1)
+20.         if cpu_percent > self.scale_up_cpu_threshold and current < self.max_replicas:
+21.             return self.scale(service, min(current + 1, self.max_replicas),
+22.                               reason=f"CPU={cpu_percent:.1f}% > {self.scale_up_cpu_threshold}%")
+23.         if cpu_percent < self.scale_down_cpu_threshold and current > self.min_replicas:
+24.             return self.scale(service, max(current - 1, self.min_replicas),
+25.                               reason=f"CPU={cpu_percent:.1f}% < {self.scale_down_cpu_threshold}%")
+26.         return {"service": service, "action": "no_change", "current_replicas": current,
+27.                 "cpu_percent": cpu_percent, "timestamp": datetime.utcnow().isoformat()}
+28. 
+29.     def scale(self, service: str, replicas: int, reason: str = "") -> Dict[str, Any]:
+30.         old = self._current_replicas.get(service, 1)
+31.         direction = "up" if replicas > old else "down"
+32.         result = subprocess.run(
+33.             ["docker", "compose", "-f", self.compose_file, "up", "-d",
+34.              "--scale", f"{service}={replicas}"],
+35.             capture_output=True, text=True, check=False)
+36.         success = result.returncode == 0
+37.         if success: self._current_replicas[service] = replicas
+38.         event = {"service": service, "action": f"scale_{direction}",
+39.                  "old_replicas": old, "new_replicas": replicas if success else old,
+40.                  "success": success, "reason": reason, "timestamp": datetime.utcnow().isoformat()}
+41.         self._scale_events.append(event); return event
+42. 
+43.     def get_scale_history(self, limit: int = 20): return self._scale_events[-limit:]
+44.     def get_current_replicas(self): return dict(self._current_replicas)
+45. 
