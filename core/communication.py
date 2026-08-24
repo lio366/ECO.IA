@@ -35,22 +35,29 @@ class MessageBus:
         self._max_history = 1000
 
     async def subscribe(self, agent_name: str, handler: Handler) -> None:
-        for key in (agent_name, "*"):
-            self._subscribers.setdefault(key, []).append(handler)
+        # Register only under the agent's own name; "*" is reserved for
+        # explicit broadcast subscribers so targeted messages are not
+        # inadvertently fanned out to every subscribed handler.
+        self._subscribers.setdefault(agent_name, []).append(handler)
 
     async def unsubscribe(self, agent_name: str, handler: Handler) -> None:
-        for key in (agent_name, "*"):
-            h = self._subscribers.get(key, [])
-            if handler in h:
-                h.remove(handler)
+        h = self._subscribers.get(agent_name, [])
+        if handler in h:
+            h.remove(handler)
 
     async def publish(self, message: Message) -> None:
         self._store(message)
-        handlers = list(self._subscribers.get(message.target, []))
-        if message.target != "*":
-            for h in self._subscribers.get("*", []):
-                if h not in handlers:
-                    handlers.append(h)
+        if message.target == "*":
+            # Broadcast: deliver to every registered handler (deduplicated)
+            seen: set = set()
+            handlers = []
+            for bucket in self._subscribers.values():
+                for h in bucket:
+                    if id(h) not in seen:
+                        seen.add(id(h))
+                        handlers.append(h)
+        else:
+            handlers = list(self._subscribers.get(message.target, []))
         await asyncio.gather(*[h(message) for h in handlers], return_exceptions=True)
 
     def _store(self, msg: Message) -> None:

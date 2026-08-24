@@ -1,5 +1,4 @@
 """API key authentication middleware."""
-import hashlib
 import hmac
 import logging
 import os
@@ -17,10 +16,7 @@ _ADMIN_PREFIX = "/api/v1/admin"
 
 def _constant_compare(a: str, b: str) -> bool:
     """Timing-safe string comparison."""
-    return hmac.compare_digest(
-        hashlib.sha256(a.encode()).digest(),
-        hashlib.sha256(b.encode()).digest(),
-    )
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):

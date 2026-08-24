@@ -25,7 +25,7 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("🌱 ECO-IA API starting — OVHcloud US 135.148.232.10")
+    logger.info("🌱 ECO-IA API starting")
     yield
     logger.info("ECO-IA API shutting down.")
 
@@ -34,8 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ECO-IA API",
         description=(
-            "Autonomous AI-Agent server system — self-sustaining, income-generating, sustainable. "
-            "OVHcloud US b3-8 | 135.148.232.10"
+            "Autonomous AI-Agent server system — self-sustaining, income-generating, sustainable."
         ),
         version="1.0.0",
         lifespan=lifespan,
@@ -44,10 +43,14 @@ def create_app() -> FastAPI:
     )
 
     # ── CORS ─────────────────────────────────────────────────────────────────
+    cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+    # Credentials cannot be used with a wildcard origin; only enable them
+    # when a concrete non-wildcard origin list is explicitly configured.
+    allow_credentials = bool(cors_origins) and "*" not in cors_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
-        allow_credentials=True,
+        allow_origins=cors_origins or ["*"],
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -73,7 +76,6 @@ def create_app() -> FastAPI:
             "status": "ok",
             "system": "ECO-IA",
             "version": "1.0.0",
-            "server": "135.148.232.10",
             "docs": "/docs",
             "dashboard": "/dashboard",
         }
