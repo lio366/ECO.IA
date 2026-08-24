@@ -1,1 +1,100 @@
-No files matched the pattern.
+1. """ECO-IA FastAPI main application — OVHcloud US b3-8."""
+2. import logging
+3. import os
+4. from contextlib import asynccontextmanager
+5. from pathlib import Path
+6. from typing import AsyncGenerator
+7. 
+8. from fastapi import FastAPI
+9. from fastapi.middleware.cors import CORSMiddleware
+10. from fastapi.responses import HTMLResponse
+11. from fastapi.staticfiles import StaticFiles
+12. 
+13. from api.middleware.auth import APIKeyMiddleware
+14. from api.middleware.rate_limit import RateLimitMiddleware
+15. from api.routes import admin, services, webhooks
+16. 
+17. logging.basicConfig(
+18.     level=logging.INFO,
+19.     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+20. )
+21. logger = logging.getLogger(__name__)
+22. 
+23. FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+24. 
+25. 
+26. @asynccontextmanager
+27. async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+28.     logger.info("🌱 ECO-IA API starting — OVHcloud US 135.148.232.10")
+29.     yield
+30.     logger.info("ECO-IA API shutting down.")
+31. 
+32. 
+33. def create_app() -> FastAPI:
+34.     app = FastAPI(
+35.         title="ECO-IA API",
+36.         description=(
+37.             "Autonomous AI-Agent server system — self-sustaining, income-generating, sustainable. "
+38.             "OVHcloud US b3-8 | 135.148.232.10"
+39.         ),
+40.         version="1.0.0",
+41.         lifespan=lifespan,
+42.         docs_url="/docs",
+43.         redoc_url="/redoc",
+44.     )
+45. 
+46.     # ── CORS ─────────────────────────────────────────────────────────────────
+47.     app.add_middleware(
+48.         CORSMiddleware,
+49.         allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+50.         allow_credentials=True,
+51.         allow_methods=["*"],
+52.         allow_headers=["*"],
+53.     )
+54. 
+55.     # ── Middleware ────────────────────────────────────────────────────────────
+56.     app.add_middleware(RateLimitMiddleware)
+57.     app.add_middleware(APIKeyMiddleware)
+58. 
+59.     # ── Static files ─────────────────────────────────────────────────────────
+60.     static_dir = FRONTEND_DIR / "static"
+61.     if static_dir.exists():
+62.         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+63. 
+64.     # ── Routers ───────────────────────────────────────────────────────────────
+65.     app.include_router(services.router, prefix="/api/v1/services", tags=["Services"])
+66.     app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+67.     app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"])
+68. 
+69.     # ── Public endpoints ──────────────────────────────────────────────────────
+70.     @app.get("/", tags=["Health"])
+71.     async def root() -> dict:
+72.         return {
+73.             "status": "ok",
+74.             "system": "ECO-IA",
+75.             "version": "1.0.0",
+76.             "server": "135.148.232.10",
+77.             "docs": "/docs",
+78.             "dashboard": "/dashboard",
+79.         }
+80. 
+81.     @app.get("/health", tags=["Health"])
+82.     async def health() -> dict:
+83.         return {"status": "healthy"}
+84. 
+85.     @app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
+86.     async def dashboard():
+87.         """Admin dashboard — ECO-IA control panel."""
+88.         template = FRONTEND_DIR / "templates" / "dashboard.html"
+89.         if template.exists():
+90.             return HTMLResponse(content=template.read_text(), status_code=200)
+91.         return HTMLResponse(content="<h1>ECO-IA Dashboard</h1><p><a href='/docs'>API Docs</a></p>")
+92. 
+93.     return app
+94. 
+95. 
+96. app = create_app()
+97. 
+98. if __name__ == "__main__":
+99.     import uvicorn
+100.     uvicorn.run(

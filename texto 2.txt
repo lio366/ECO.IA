@@ -1,50 +1,45 @@
-1. """Dynamic pricing engine for ECO-IA services."""
-2. 
-3. import logging
-4. from typing import Any, Dict, List, Optional
-5. 
+1. """Auto-scaler - adjusts Docker service replicas based on load."""
+2. import logging, subprocess
+3. from datetime import datetime
+4. from typing import Any, Dict, List
+5. logger = logging.getLogger(__name__)
 6. 
-7. logger = logging.getLogger(__name__)
-8. 
-9. 
-10. PLANS: Dict[str, Dict[str, Any]] = {
-11.     "basic": {
-12.         "name": "Basic",
-13.         "base_price_usd": 9.99,
-14.         "api_calls_per_month": 10_000,
-15.         "storage_gb": 10,
-16.         "support": "community",
-17.     },
-18.     "pro": {
-19.         "name": "Pro",
-20.         "base_price_usd": 49.99,
-21.         "api_calls_per_month": 100_000,
-22.         "storage_gb": 100,
-23.         "support": "email",
-24.     },
-25.     "enterprise": {
-26.         "name": "Enterprise",
-27.         "base_price_usd": 199.99,
-28.         "api_calls_per_month": 1_000_000,
-29.         "storage_gb": 1_000,
-30.         "support": "dedicated",
-31.     },
-32. }
-33. 
-34. 
-35. class PricingEngine:
-36.     """Computes dynamic pricing based on demand and resource usage."""
-37. 
-38.     def __init__(self, demand_multiplier: float = 1.0) -> None:
-39.         self._demand_multiplier = demand_multiplier
-40.         self._plans = dict(PLANS)
-41. 
-42.     # ------------------------------------------------------------------
-43.     # Price calculation
-44.     # ------------------------------------------------------------------
+7. class AutoScaler:
+8.     def __init__(self, compose_file="docker/docker-compose.yml",
+9.                  min_replicas=1, max_replicas=10,
+10.                  scale_up_cpu_threshold=70.0, scale_down_cpu_threshold=30.0):
+11.         self.compose_file = compose_file
+12.         self.min_replicas = min_replicas; self.max_replicas = max_replicas
+13.         self.scale_up_cpu_threshold = scale_up_cpu_threshold
+14.         self.scale_down_cpu_threshold = scale_down_cpu_threshold
+15.         self._current_replicas: Dict[str, int] = {}
+16.         self._scale_events: List[Dict[str, Any]] = []
+17. 
+18.     def evaluate_and_scale(self, service: str, cpu_percent: float) -> Dict[str, Any]:
+19.         current = self._current_replicas.get(service, 1)
+20.         if cpu_percent > self.scale_up_cpu_threshold and current < self.max_replicas:
+21.             return self.scale(service, min(current + 1, self.max_replicas),
+22.                               reason=f"CPU={cpu_percent:.1f}% > {self.scale_up_cpu_threshold}%")
+23.         if cpu_percent < self.scale_down_cpu_threshold and current > self.min_replicas:
+24.             return self.scale(service, max(current - 1, self.min_replicas),
+25.                               reason=f"CPU={cpu_percent:.1f}% < {self.scale_down_cpu_threshold}%")
+26.         return {"service": service, "action": "no_change", "current_replicas": current,
+27.                 "cpu_percent": cpu_percent, "timestamp": datetime.utcnow().isoformat()}
+28. 
+29.     def scale(self, service: str, replicas: int, reason: str = "") -> Dict[str, Any]:
+30.         old = self._current_replicas.get(service, 1)
+31.         direction = "up" if replicas > old else "down"
+32.         result = subprocess.run(
+33.             ["docker", "compose", "-f", self.compose_file, "up", "-d",
+34.              "--scale", f"{service}={replicas}"],
+35.             capture_output=True, text=True, check=False)
+36.         success = result.returncode == 0
+37.         if success: self._current_replicas[service] = replicas
+38.         event = {"service": service, "action": f"scale_{direction}",
+39.                  "old_replicas": old, "new_replicas": replicas if success else old,
+40.                  "success": success, "reason": reason, "timestamp": datetime.utcnow().isoformat()}
+41.         self._scale_events.append(event); return event
+42. 
+43.     def get_scale_history(self, limit: int = 20): return self._scale_events[-limit:]
+44.     def get_current_replicas(self): return dict(self._current_replicas)
 45. 
-46.     def get_price(self, plan: str, usage_pct: float = 0.0) -> float:
-47.         """Calculate the current price for *plan* considering demand.
-48. 
-49.         Args:
-50.             plan: Plan name ("basic", "pro", "enterprise").

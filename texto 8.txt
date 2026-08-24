@@ -1,168 +1,94 @@
-1. # 🏗️ ECO-IA — Arquitectura Técnica
-2. 
-3. ## Stack completo
-4. 
-5. ```
-6. ┌─────────────────────────────────────────────────────────┐
-7. │                 🌐  Internet / Clientes                  │
-8. └─────────────────────┬───────────────────────────────────┘
-9.                       │ HTTPS :443 / HTTP :80
-10.                ┌──────▼──────┐
-11.                │    Nginx    │  (reverse proxy + rate limit)
-12.                └──────┬──────┘
-13.                       │ :8000
-14.           ┌───────────▼───────────┐
-15.           │    ECO-IA FastAPI     │  Python 3.12
-16.           │    REST API :8000     │  Uvicorn + 4 workers
-17.           └───────────┬───────────┘
-18.                       │
-19.          ┌────────────▼────────────┐
-20.          │   🧠 ORQUESTADOR        │  OrchestratorAgent
-21.          │   LLM: GPT-4o-mini      │  MessageBus async
-22.          └────┬───┬───┬───┬───┬───┘
-23.               │   │   │   │   │
-24.     ┌─────────┤ ┌─┤ ┌─┤ ┌─┤ ┌─┤
-25.     │ 💰 Monet│ │🔧│ │🌿│ │🛡│ │📊│
-26.     └─────────┘ └─┘ └─┘ └─┘ └─┘
-27.               │
-28.     ┌─────────▼──────────────────────────┐
-29.     │         Capa de datos              │
-30.     │  PostgreSQL :5432  Redis :6379     │
-31.     └────────────────────────────────────┘
-32.               │
-33.     ┌─────────▼──────────────────────────┐
-34.     │         Monitoreo                  │
-35.     │  Prometheus :9090  Grafana :3000   │
-36.     │  AlertManager :9093                │
-37.     └────────────────────────────────────┘
-38. ```
-39. 
-40. ---
+1. """Hosting service manager — manages hosted environments."""
+2. import logging
+3. import os
+4. from datetime import datetime
+5. from typing import Any, Dict, List, Optional
+6. 
+7. logger = logging.getLogger(__name__)
+8. 
+9. HOSTING_PLANS = {
+10.     "basic": {
+11.         "name": "Basic",
+12.         "price_usd": 9.99,
+13.         "cpu_cores": 0.5,
+14.         "ram_gb": 0.5,
+15.         "storage_gb": 10,
+16.         "bandwidth_gb": 100,
+17.         "max_instances": 1,
+18.         "uptime_sla": 99.0,
+19.     },
+20.     "pro": {
+21.         "name": "Pro",
+22.         "price_usd": 49.99,
+23.         "cpu_cores": 2,
+24.         "ram_gb": 2,
+25.         "storage_gb": 100,
+26.         "bandwidth_gb": 1000,
+27.         "max_instances": 5,
+28.         "uptime_sla": 99.9,
+29.     },
+30.     "enterprise": {
+31.         "name": "Enterprise",
+32.         "price_usd": 199.99,
+33.         "cpu_cores": 8,
+34.         "ram_gb": 16,
+35.         "storage_gb": 1000,
+36.         "bandwidth_gb": 10000,
+37.         "max_instances": 20,
+38.         "uptime_sla": 99.99,
+39.     },
+40. }
 41. 
-42. ## Componentes
-43. 
-44. ### FastAPI — REST API
+42. 
+43. class HostingManager:
+44.     """Manages hosted service instances for clients."""
 45. 
-46. - **Framework:** FastAPI 0.115 + Uvicorn 0.34
-47. - **Workers:** 4 procesos Uvicorn
-48. - **Auth:** API Keys con `hmac.compare_digest` (anti-timing)
-49. - **Rate Limit:** 100 req/min por IP (sliding window)
-50. - **CORS:** Configurable vía `CORS_ORIGINS`
-51. 
-52. ### Agentes IA — Multi-Agent System
+46.     def __init__(self):
+47.         self._instances: Dict[str, Dict[str, Any]] = {}
+48.         self._server_ip = os.getenv("SERVER_IP", "135.148.232.10")
+49. 
+50.     def get_plans(self) -> List[Dict[str, Any]]:
+51.         """Return all available hosting plans."""
+52.         return [{"plan_key": k, **v} for k, v in HOSTING_PLANS.items()]
 53. 
-54. - **Comunicación:** `MessageBus` async pub/sub en memoria
-55. - **Base:** `AgentBase` ABC con lifecycle hooks
-56. - **Scheduler:** `TaskScheduler` asyncio — tareas periódicas
-57. - **LLM:** `LLMConnector` — OpenAI o Ollama (self-hosted)
-58. 
-59. ### Celery — Task Queue
-60. 
-61. - **Broker:** Redis
-62. - **Workers:** `eco-ia-worker` (4 concurrencias)
-63. - **Beat:** `eco-ia-beat` (scheduler distribuido)
-64. 
-65. ### Base de datos
-66. 
-67. - **PostgreSQL 15:** datos persistentes (clientes, facturas, logs)
-68. - **Redis 7:** cache, sesiones, Celery broker
-69. 
-70. ### Monitoreo
-71. 
-72. - **Prometheus:** métricas de API, sistema, Docker
-73. - **Grafana:** dashboards visuales
-74. - **AlertManager:** alertas por email SMTP
-75. 
-76. ---
-77. 
-78. ## Flujo de una request
+54.     def get_plan(self, plan_key: str) -> Optional[Dict[str, Any]]:
+55.         return HOSTING_PLANS.get(plan_key)
+56. 
+57.     def provision_instance(self, client_id: str, plan: str) -> Dict[str, Any]:
+58.         """Provision a hosting instance for a client."""
+59.         plan_config = HOSTING_PLANS.get(plan)
+60.         if not plan_config:
+61.             return {"status": "error", "message": f"Unknown plan: {plan}"}
+62.         instance_id = f"eco-{client_id[:8]}"
+63.         instance = {
+64.             "instance_id": instance_id,
+65.             "client_id": client_id,
+66.             "plan": plan,
+67.             "status": "running",
+68.             "server_ip": self._server_ip,
+69.             "created_at": datetime.utcnow().isoformat(),
+70.             "resources": plan_config,
+71.         }
+72.         self._instances[instance_id] = instance
+73.         logger.info("Provisioned instance %s for client %s (plan: %s)",
+74.                     instance_id, client_id, plan)
+75.         return instance
+76. 
+77.     def get_instance(self, instance_id: str) -> Optional[Dict[str, Any]]:
+78.         return self._instances.get(instance_id)
 79. 
-80. ```
-81. Cliente
-82.   → Nginx (rate limit, proxy)
-83.     → FastAPI (auth middleware)
-84.       → Route handler
-85.         → Agent / Service
-86.           → LLM / Stripe / DB
-87.         ← Response
-88.       ← JSON
-89.     ← HTTP
-90.   ← Response
-91. ```
-92. 
-93. ---
+80.     def list_instances(self, client_id: Optional[str] = None) -> List[Dict[str, Any]]:
+81.         instances = list(self._instances.values())
+82.         if client_id:
+83.             instances = [i for i in instances if i["client_id"] == client_id]
+84.         return instances
+85. 
+86.     def get_service_status(self) -> Dict[str, Any]:
+87.         return {
+88.             "status": "operational",
+89.             "server": self._server_ip,
+90.             "uptime_pct": 99.9,
+91.             "active_instances": len([i for i in self._instances.values() if i["status"] == "running"]),
+92.             "timestamp": datetime.utcnow().isoformat(),
+93.         }
 94. 
-95. ## Seguridad
-96. 
-97. | Capa | Mecanismo |
-98. |------|-----------|
-99. | Red | UFW firewall (puertos 22, 80, 443, 8000, 3000, 9090) |
-100. | SSH | Fail2Ban + SSH key only |
-101. | API | HMAC API keys, rate limiting 100 req/min |
-102. | Webhooks | HMAC-SHA256 signature verification |
-103. | Firewall dinámico | Auto-block IPs maliciosas (10 intentos) |
-104. | Contenedores | Usuario no-root (`ecouser`) |
-105. | Secrets | `.env` excluido de git, permisos 600 |
-106. | IP validation | Octetos 0-255 + CIDR max /32 |
-107. 
-108. ---
-109. 
-110. ## Servidor OVHcloud b3-8
-111. 
-112. | Recurso | Especificación |
-113. |---------|---------------|
-114. | CPU | 3 vCores |
-115. | RAM | 8 GB |
-116. | Disco | 48 GB SSD |
-117. | Red | 500 Mbit público |
-118. | OS | Ubuntu 24.04 LTS |
-119. | IP | 135.148.232.10 |
-120. | Región | Virginia US-EAST-VA-1 |
-121. 
-122. ### Distribución de recursos
-123. 
-124. | Servicio | RAM estimada |
-125. |---------|-------------|
-126. | eco-ia-api (x4) | ~800 MB |
-127. | eco-ia-worker | ~300 MB |
-128. | eco-ia-beat | ~150 MB |
-129. | PostgreSQL | ~512 MB |
-130. | Redis | ~256 MB |
-131. | Prometheus | ~256 MB |
-132. | Grafana | ~256 MB |
-133. | Nginx | ~50 MB |
-134. | **Total** | **~2.6 GB** |
-135. | **Disponible** | **~5.4 GB libre** |
-136. 
-137. ---
-138. 
-139. ## Docker Compose — Servicios
-140. 
-141. ```yaml
-142. services:
-143.   eco-ia-api      # FastAPI REST API
-144.   eco-ia-worker   # Celery worker (tareas async)
-145.   eco-ia-beat     # Celery beat (scheduler)
-146.   postgres        # PostgreSQL 15
-147.   redis           # Redis 7
-148.   nginx           # Reverse proxy
-149.   prometheus      # Métricas
-150.   grafana         # Dashboards
-151.   alertmanager    # Alertas email
-152.   node-exporter   # Métricas del host
-153. ```
-154. 
-155. ---
-156. 
-157. ## Variables de entorno críticas
-158. 
-159. ```bash
-160. SERVER_IP=135.148.232.10
-161. ECO_IA_API_KEY=           # openssl rand -hex 32
-162. ECO_IA_ADMIN_KEY=         # openssl rand -hex 32
-163. POSTGRES_PASSWORD=        # password fuerte
-164. OPENAI_API_KEY=           # sk-...
-165. STRIPE_SECRET_KEY=        # sk_live_...
-166. GF_SECURITY_ADMIN_PASSWORD=
-167. ```
-168. 

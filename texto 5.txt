@@ -1,1 +1,31 @@
-No files matched the pattern.
+[grep content: 24 matches across 5 file(s) under /home/runner/work/ECO-IA/ECO-IA]
+test_api.py:19:     from api.main import create_app
+
+main.py (3 match(es)):
+  13: from api.middleware.auth import APIKeyMiddleware
+  14: from api.middleware.rate_limit import RateLimitMiddleware
+  15: from api.routes import admin, services, webhooks
+
+orchestrator.py (4 match(es)):
+  8: from core.agent_base import AgentBase
+  9: from core.communication import Message, MessageBus
+  10: from core.llm_connector import LLMConnector
+  11: from core.scheduler import TaskScheduler
+completion.py:6: from core.llm_connector import LLMConnector
+
+test_agents.py (15 match(es)):
+  12: from core.communication import Message, MessageBus
+  13: from core.scheduler import TaskScheduler
+  14: from core.llm_connector import LLMConnector
+  16: from agents.monetization.billing import BillingManager
+  17: from agents.monetization.clients import ClientManager
+  18: from agents.monetization.pricing import PricingEngine
+  20: from agents.devops.backup import BackupManager
+  21: from agents.devops.auto_heal import AutoHealer
+  23: from agents.resources.optimizer import ResourceOptimizer
+  24: from agents.resources.scaler import AutoScaler
+  26: from agents.security.firewall import FirewallManager
+  27: from agents.security.intrusion_detector import IntrusionDetector
+  29: from agents.analytics.predictor import Predictor
+  30: from agents.analytics.dashboard import DashboardData
+  31: from agents.analytics.reporter import Reporter
