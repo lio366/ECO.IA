@@ -1,50 +1,80 @@
-1. """Resource optimiser - monitors and optimises CPU/RAM usage."""
-2. 
-3. import logging
-4. from typing import Any, Dict, Optional
-5. 
-6. 
-7. logger = logging.getLogger(__name__)
-8. 
-9. 
-10. class ResourceOptimizer:
-11.     """Monitors system resource usage and applies optimisations."""
+1. """ECO-IA SQLAlchemy models."""
+2. import uuid
+3. from datetime import datetime
+4. from sqlalchemy import (
+5.     Column, String, Float, Boolean, Integer,
+6.     DateTime, Text, ForeignKey, Enum
+7. )
+8. from sqlalchemy.orm import relationship
+9. from sqlalchemy.dialects.postgresql import UUID
+10. from database.connection import Base
+11. import enum
 12. 
-13.     def __init__(self, cpu_threshold: float = 85.0, ram_threshold: float = 90.0) -> None:
-14.         self.cpu_threshold = cpu_threshold
-15.         self.ram_threshold = ram_threshold
-16. 
-17.     # ------------------------------------------------------------------
-18.     # Metrics
-19.     # ------------------------------------------------------------------
-20. 
-21.     def get_metrics(self) -> Dict[str, Any]:
-22.         """Return current CPU, RAM, and disk metrics."""
-23.         try:
-24.             import psutil  # type: ignore[import]
-25. 
-26.             cpu_pct = psutil.cpu_percent(interval=1)
-27.             ram = psutil.virtual_memory()
-28.             disk = psutil.disk_usage("/")
-29.             net = psutil.net_io_counters()
-30.             return {
-31.                 "cpu_percent": cpu_pct,
-32.                 "ram_percent": ram.percent,
-33.                 "ram_used_gb": round(ram.used / 1024**3, 2),
-34.                 "ram_total_gb": round(ram.total / 1024**3, 2),
-35.                 "disk_percent": disk.percent,
-36.                 "disk_used_gb": round(disk.used / 1024**3, 2),
-37.                 "disk_total_gb": round(disk.total / 1024**3, 2),
-38.                 "net_bytes_sent_mb": round(net.bytes_sent / 1024**2, 2),
-39.                 "net_bytes_recv_mb": round(net.bytes_recv / 1024**2, 2),
-40.             }
-41.         except ImportError:
-42.             logger.warning("psutil not installed; returning simulated metrics.")
-43.             return self._simulate_metrics()
-44. 
-45.     def _simulate_metrics(self) -> Dict[str, Any]:
-46.         import random
-47. 
-48.         return {
-49.             "cpu_percent": round(random.uniform(10, 60), 1),
-50.             "ram_percent": round(random.uniform(30, 70), 1),
+13. 
+14. class PlanEnum(str, enum.Enum):
+15.     basic = "basic"
+16.     pro = "pro"
+17.     enterprise = "enterprise"
+18. 
+19. 
+20. class Client(Base):
+21.     """Paying client of ECO-IA."""
+22.     __tablename__ = "clients"
+23. 
+24.     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+25.     name = Column(String(255), nullable=False)
+26.     email = Column(String(255), unique=True, nullable=False, index=True)
+27.     plan = Column(Enum(PlanEnum), default=PlanEnum.basic, nullable=False)
+28.     stripe_customer_id = Column(String(255), nullable=True, unique=True)
+29.     stripe_subscription_id = Column(String(255), nullable=True)
+30.     is_active = Column(Boolean, default=True, nullable=False)
+31.     monthly_spend = Column(Float, default=0.0)
+32.     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+33.     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+34. 
+35.     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
+36.     api_usages = relationship("APIUsage", back_populates="client", cascade="all, delete-orphan")
+37. 
+38.     def __repr__(self):
+39.         return f"<Client {self.email} plan={self.plan}>"
+40. 
+41. 
+42. class Invoice(Base):
+43.     """Stripe invoice record."""
+44.     __tablename__ = "invoices"
+45. 
+46.     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+47.     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False)
+48.     stripe_invoice_id = Column(String(255), nullable=True, unique=True)
+49.     amount_cents = Column(Integer, nullable=False)
+50.     currency = Column(String(3), default="usd")
+51.     status = Column(String(50), default="pending")
+52.     description = Column(Text, nullable=True)
+53.     created_at = Column(DateTime, default=datetime.utcnow)
+54.     paid_at = Column(DateTime, nullable=True)
+55. 
+56.     client = relationship("Client", back_populates="invoices")
+57. 
+58. 
+59. class APIUsage(Base):
+60.     """API usage tracking per client."""
+61.     __tablename__ = "api_usage"
+62. 
+63.     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+64.     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False)
+65.     endpoint = Column(String(255), nullable=False)
+66.     tokens_used = Column(Integer, default=0)
+67.     cost_usd = Column(Float, default=0.0)
+68.     model = Column(String(100), nullable=True)
+69.     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+70. 
+71.     client = relationship("Client", back_populates="api_usages")
+72. 
+73. 
+74. class SystemMetric(Base):
+75.     """Historical system metrics."""
+76.     __tablename__ = "system_metrics"
+77. 
+78.     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+79.     cpu_percent = Column(Float, nullable=False)
+80.     ram_percent = Column(Float, nullable=False)
