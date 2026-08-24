@@ -1,3 +1,0 @@
-$ cd /home/runner/work/ECO-IA/ECO-IA && python -m ruff check .
-/usr/bin/python: No module named ruff
-<shellId: 8 completed with exit code 1>

@@ -1,4 +1,0 @@
-Background agents (scope: children):
-
-Running (1):
-  🔄 repo-gap-scan: explore - "Inventory repo gaps" (38s, owner: 3f967747-9fa2-4368-91ec-96f3d000aa95)
