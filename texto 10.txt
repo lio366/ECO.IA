@@ -1,64 +1,95 @@
-[grep content: 49 matches across 23 file(s) under /home/runner/work/ECO-IA/ECO-IA]
-scaler.py:7: class AutoScaler:
-
-scheduler.py (2 match(es)):
-  7: class ScheduledTask:
-  13: class TaskScheduler:
-processor.py:9: class DataProcessor:
-
-agent_base.py (2 match(es)):
-  1: """Base class for all ECO-IA agents."""
-  9: class AgentBase(ABC):
-intrusion_detector.py:20: class IntrusionDetector:
-orchestrator.py:17: class OrchestratorAgent(AgentBase):
-
-test_api.py (5 match(es)):
-  28: class TestPublicEndpoints:
-  56: class TestAuthentication:
-  98: class TestServiceEndpoints:
-  130: class TestAdminEndpoints:
-  166: class TestWebhookEndpoints:
-predictor.py:12: class Predictor:
-firewall.py:16: class FirewallManager:
-reporter.py:14: class Reporter:
-auditor.py:12: class SecurityAuditor:
-optimizer.py:10: class ResourceOptimizer:
-billing.py:11: class BillingManager:
-dashboard.py:11: class DashboardData:
-
-communication.py (2 match(es)):
-  9: class Message:
-  23: class MessageBus:
-manager.py:43: class HostingManager:
-cleaner.py:15: class Cleaner:
-
-models.py (7 match(es)):
-  14: class PlanEnum(str, enum.Enum):
-  20: class Client(Base):
-  42: class Invoice(Base):
-  59: class APIUsage(Base):
-  74: class SystemMetric(Base):
-  87: class SecurityAlert(Base):
-  101: class AgentEvent(Base):
-llm_connector.py:6: class LLMConnector:
-
-clients.py (2 match(es)):
-  12: class Client:
-  49: class ClientManager:
-
-test_agents.py (13 match(es)):
-  38: class TestMessageBus:
-  83: class TestTaskScheduler:
-  113: class TestLLMConnector:
-  139: class TestClientManager:
-  183: class TestPricingEngine:
-  227: class TestBillingManager:
-  250: class TestBackupManager:
-  274: class TestResourceOptimizer:
-  298: class TestFirewallManager:
-  328: class TestIntrusionDetector:
-  350: class TestPredictor:
-  390: class TestDashboardData:
-  425: class TestReporter:
-pricing.py:35: class PricingEngine:
-completion.py:20: class AICompletionService:
+1. """Intrusion detector - analyses logs for suspicious activity."""
+2. 
+3. import logging
+4. import re
+5. from collections import Counter
+6. from datetime import datetime, timedelta
+7. from pathlib import Path
+8. from typing import Any, Dict, List, Optional
+9. 
+10. 
+11. logger = logging.getLogger(__name__)
+12. 
+13. # Common brute-force pattern in auth logs
+14. _FAILED_SSH_RE = re.compile(r"Failed password for .+ from (\d+\.\d+\.\d+\.\d+)")
+15. _INVALID_USER_RE = re.compile(r"Invalid user \S+ from (\d+\.\d+\.\d+\.\d+)")
+16. _PORT_SCAN_THRESHOLD = 20       # unique ports in 1 minute → likely scan
+17. _BRUTE_FORCE_THRESHOLD = 10     # failed logins from single IP → brute force
+18. 
+19. 
+20. class IntrusionDetector:
+21.     """Analyses system logs to detect and report intrusion attempts."""
+22. 
+23.     def __init__(
+24.         self,
+25.         auth_log_path: str = "/var/log/auth.log",
+26.         threshold_minutes: int = 5,
+27.         brute_force_threshold: int = _BRUTE_FORCE_THRESHOLD,
+28.     ) -> None:
+29.         self.auth_log_path = auth_log_path
+30.         self.threshold_minutes = threshold_minutes
+31.         self.brute_force_threshold = brute_force_threshold
+32.         self._alerts: List[Dict[str, Any]] = []
+33.         self._blocked_ips: List[str] = []
+34. 
+35.     # ------------------------------------------------------------------
+36.     # Log analysis
+37.     # ------------------------------------------------------------------
+38. 
+39.     def analyse_auth_log(self) -> List[Dict[str, Any]]:
+40.         """Parse auth.log and return detected threats."""
+41.         threats = []
+42.         log_path = Path(self.auth_log_path)
+43.         if not log_path.exists():
+44.             logger.warning("Auth log not found at '%s'. Skipping.", self.auth_log_path)
+45.             return []
+46. 
+47.         ip_fail_counts: Counter = Counter()
+48.         try:
+49.             with log_path.open(errors="replace") as fh:
+50.                 for line in fh:
+51.                     for pattern in (_FAILED_SSH_RE, _INVALID_USER_RE):
+52.                         m = pattern.search(line)
+53.                         if m:
+54.                             ip_fail_counts[m.group(1)] += 1
+55.         except OSError as exc:
+56.             logger.error("Could not read auth log: %s", exc)
+57.             return []
+58. 
+59.         for ip, count in ip_fail_counts.items():
+60.             if count >= self.brute_force_threshold:
+61.                 threat = {
+62.                     "type": "brute_force",
+63.                     "ip": ip,
+64.                     "failed_attempts": count,
+65.                     "timestamp": datetime.utcnow().isoformat(),
+66.                     "severity": "high" if count >= self.brute_force_threshold * 2 else "medium",
+67.                 }
+68.                 threats.append(threat)
+69.                 self._alerts.append(threat)
+70.                 logger.warning("Brute-force detected from %s (%d attempts).", ip, count)
+71. 
+72.         return threats
+73. 
+74.     # ------------------------------------------------------------------
+75.     # Threat management
+76.     # ------------------------------------------------------------------
+77. 
+78.     def get_suspicious_ips(self) -> List[str]:
+79.         """Return IPs that triggered alerts."""
+80.         return list({a["ip"] for a in self._alerts if "ip" in a})
+81. 
+82.     def get_alerts(self, severity: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+83.         alerts = self._alerts
+84.         if severity:
+85.             alerts = [a for a in alerts if a.get("severity") == severity]
+86.         return alerts[-limit:]
+87. 
+88.     def get_summary(self) -> Dict[str, Any]:
+89.         return {
+90.             "total_alerts": len(self._alerts),
+91.             "high_severity": sum(1 for a in self._alerts if a.get("severity") == "high"),
+92.             "medium_severity": sum(1 for a in self._alerts if a.get("severity") == "medium"),
+93.             "suspicious_ips": self.get_suspicious_ips(),
+94.         }
+95. 

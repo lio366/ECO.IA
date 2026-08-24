@@ -1,50 +1,50 @@
-1. """Predictor - simple time-series anomaly detection."""
+1. """Client management for the monetization agent."""
 2. 
 3. import logging
-4. import statistics
-5. from collections import deque
-6. from typing import Any, Deque, Dict, List, Optional, Tuple
+4. import uuid
+5. from datetime import datetime
+6. from typing import Any, Dict, List, Optional
 7. 
 8. 
 9. logger = logging.getLogger(__name__)
 10. 
 11. 
-12. class Predictor:
-13.     """Lightweight anomaly predictor using rolling statistics."""
+12. class Client:
+13.     """Represents a paying client of the ECO-IA system."""
 14. 
-15.     def __init__(self, window_size: int = 20, z_score_threshold: float = 2.5) -> None:
-16.         self.window_size = window_size
-17.         self.z_score_threshold = z_score_threshold
-18.         self._series: Dict[str, Deque[float]] = {}
-19.         self._predictions: List[Dict[str, Any]] = []
-20. 
-21.     # ------------------------------------------------------------------
-22.     # Data ingestion
-23.     # ------------------------------------------------------------------
-24. 
-25.     def record(self, metric: str, value: float) -> None:
-26.         """Add a new observation for *metric*."""
-27.         if metric not in self._series:
-28.             self._series[metric] = deque(maxlen=self.window_size)
-29.         self._series[metric].append(value)
-30. 
-31.     # ------------------------------------------------------------------
-32.     # Anomaly detection
-33.     # ------------------------------------------------------------------
-34. 
-35.     def is_anomaly(self, metric: str, value: float) -> Tuple[bool, Optional[float]]:
-36.         """Return (is_anomaly, z_score) for the given value."""
-37.         series = list(self._series.get(metric, []))
-38.         if len(series) < 3:
-39.             return False, None
-40.         try:
-41.             mean = statistics.mean(series)
-42.             std = statistics.stdev(series)
-43.         except statistics.StatisticsError:
-44.             return False, None
-45. 
-46.         if std == 0:
-47.             return False, 0.0
+15.     def __init__(
+16.         self,
+17.         client_id: str,
+18.         name: str,
+19.         email: str,
+20.         plan: str = "basic",
+21.         stripe_customer_id: Optional[str] = None,
+22.     ) -> None:
+23.         self.client_id = client_id
+24.         self.name = name
+25.         self.email = email
+26.         self.plan = plan
+27.         self.stripe_customer_id = stripe_customer_id
+28.         self.created_at = datetime.utcnow()
+29.         self.last_activity: Optional[datetime] = None
+30.         self.is_active = True
+31.         self.monthly_spend: float = 0.0
+32.         self.upsell_opportunities: List[str] = []
+33. 
+34.     def to_dict(self) -> Dict[str, Any]:
+35.         return {
+36.             "client_id": self.client_id,
+37.             "name": self.name,
+38.             "email": self.email,
+39.             "plan": self.plan,
+40.             "stripe_customer_id": self.stripe_customer_id,
+41.             "created_at": self.created_at.isoformat(),
+42.             "last_activity": self.last_activity.isoformat() if self.last_activity else None,
+43.             "is_active": self.is_active,
+44.             "monthly_spend": self.monthly_spend,
+45.             "upsell_opportunities": self.upsell_opportunities,
+46.         }
+47. 
 48. 
-49.         z_score = abs(value - mean) / std
-50.         return z_score > self.z_score_threshold, round(z_score, 3)
+49. class ClientManager:
+50.     """Manages the lifecycle of ECO-IA clients."""

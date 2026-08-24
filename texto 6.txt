@@ -1,139 +1,67 @@
-1. """Billing management via Stripe API."""
-2. 
-3. import logging
-4. import os
-5. from typing import Any, Dict, List, Optional
+1. #!/usr/bin/env bash
+2. # =============================================================================
+3. # ECO-IA – Automated Backup Script
+4. # =============================================================================
+5. set -euo pipefail
 6. 
-7. 
-8. logger = logging.getLogger(__name__)
-9. 
-10. 
-11. class BillingManager:
-12.     """Handles automatic invoicing and payment collection through Stripe."""
-13. 
-14.     def __init__(self, stripe_api_key: Optional[str] = None) -> None:
-15.         self._api_key = stripe_api_key or os.getenv("STRIPE_SECRET_KEY", "")
-16.         self._stripe_available = False
-17.         self._invoices: List[Dict[str, Any]] = []
-18.         self._init_stripe()
-19. 
-20.     def _init_stripe(self) -> None:
-21.         try:
-22.             import stripe  # type: ignore[import]
-23. 
-24.             stripe.api_key = self._api_key
-25.             self._stripe = stripe
-26.             self._stripe_available = True
-27.             logger.info("Stripe initialised.")
-28.         except ImportError:
-29.             logger.warning("stripe package not installed; billing in simulation mode.")
-30. 
-31.     # ------------------------------------------------------------------
-32.     # Customers
-33.     # ------------------------------------------------------------------
-34. 
-35.     async def create_customer(self, email: str, name: str, metadata: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-36.         """Create a new Stripe customer."""
-37.         if not self._stripe_available:
-38.             return self._simulate("create_customer", email=email, name=name)
-39.         customer = self._stripe.Customer.create(
-40.             email=email,
-41.             name=name,
-42.             metadata=metadata or {},
-43.         )
-44.         logger.info("Customer created: %s", customer["id"])
-45.         return dict(customer)
-46. 
-47.     async def get_customer(self, customer_id: str) -> Dict[str, Any]:
-48.         """Retrieve a Stripe customer by ID."""
-49.         if not self._stripe_available:
-50.             return self._simulate("get_customer", customer_id=customer_id)
-51.         return dict(self._stripe.Customer.retrieve(customer_id))
-52. 
-53.     # ------------------------------------------------------------------
-54.     # Subscriptions
-55.     # ------------------------------------------------------------------
-56. 
-57.     async def create_subscription(
-58.         self,
-59.         customer_id: str,
-60.         price_id: str,
-61.         trial_days: int = 0,
-62.     ) -> Dict[str, Any]:
-63.         """Subscribe a customer to a plan."""
-64.         if not self._stripe_available:
-65.             return self._simulate("create_subscription", customer_id=customer_id, price_id=price_id)
-66.         params: Dict[str, Any] = {
-67.             "customer": customer_id,
-68.             "items": [{"price": price_id}],
-69.         }
-70.         if trial_days > 0:
-71.             params["trial_period_days"] = trial_days
-72.         subscription = self._stripe.Subscription.create(**params)
-73.         logger.info("Subscription created: %s", subscription["id"])
-74.         return dict(subscription)
-75. 
-76.     async def cancel_subscription(self, subscription_id: str) -> Dict[str, Any]:
-77.         """Cancel an active subscription."""
-78.         if not self._stripe_available:
-79.             return self._simulate("cancel_subscription", subscription_id=subscription_id)
-80.         subscription = self._stripe.Subscription.delete(subscription_id)
-81.         logger.info("Subscription cancelled: %s", subscription_id)
-82.         return dict(subscription)
-83. 
-84.     # ------------------------------------------------------------------
-85.     # Invoices
-86.     # ------------------------------------------------------------------
-87. 
-88.     async def create_invoice(self, customer_id: str, amount_cents: int, description: str) -> Dict[str, Any]:
-89.         """Create and finalise an invoice."""
-90.         if not self._stripe_available:
-91.             invoice_sim = self._simulate(
-92.                 "create_invoice",
-93.                 customer_id=customer_id,
-94.                 amount=amount_cents,
-95.                 description=description,
-96.             )
-97.             self._invoices.append(invoice_sim)
-98.             return invoice_sim
-99. 
-100.         invoice_item = self._stripe.InvoiceItem.create(
-101.             customer=customer_id,
-102.             amount=amount_cents,
-103.             currency="usd",
-104.             description=description,
-105.         )
-106.         invoice = self._stripe.Invoice.create(customer=customer_id)
-107.         self._stripe.Invoice.finalize_invoice(invoice["id"])
-108.         result = dict(invoice)
-109.         self._invoices.append(result)
-110.         logger.info("Invoice created: %s", invoice["id"])
-111.         return result
-112. 
-113.     async def list_invoices(self, customer_id: Optional[str] = None) -> List[Dict[str, Any]]:
-114.         """List invoices, optionally filtered by customer."""
-115.         if not self._stripe_available:
-116.             return self._invoices
-117.         params: Dict[str, Any] = {"limit": 100}
-118.         if customer_id:
-119.             params["customer"] = customer_id
-120.         invoices = self._stripe.Invoice.list(**params)
-121.         return [dict(inv) for inv in invoices["data"]]
-122. 
-123.     # ------------------------------------------------------------------
-124.     # Simulation helpers
-125.     # ------------------------------------------------------------------
-126. 
-127.     def _simulate(self, action: str, **kwargs: Any) -> Dict[str, Any]:
-128.         import uuid
-129. 
-130.         logger.debug("Simulating Stripe action '%s' with %s", action, kwargs)
-131.         return {"id": f"sim_{uuid.uuid4().hex[:8]}", "action": action, "params": kwargs, "status": "simulated"}
-132. 
-133.     def get_revenue_summary(self) -> Dict[str, Any]:
-134.         """Return a summary of collected revenue (simulation)."""
-135.         return {
-136.             "total_invoices": len(self._invoices),
-137.             "stripe_available": self._stripe_available,
-138.         }
-139. 
+7. # Load environment
+8. ECO_IA_DIR="${ECO_IA_DIR:-/opt/eco-ia}"
+9. # shellcheck source=/dev/null
+10. [[ -f "$ECO_IA_DIR/.env" ]] && source "$ECO_IA_DIR/.env"
+11. 
+12. TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+13. BACKUP_NAME="eco-ia-backup-$TIMESTAMP"
+14. REMOTE_PATH="${HETZNER_STORAGE_BOX_USER:-}@${HETZNER_STORAGE_BOX_HOST:-}:/backups/eco-ia"
+15. RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+16. LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-}"
+17. if [[ -z "$LOCAL_BACKUP_DIR" ]]; then
+18.     LOCAL_BACKUP_DIR=$(mktemp -d -t eco-ia-backups-XXXXXX)
+19.     CLEANUP_TMPDIR=1
+20. else
+21.     mkdir -p "$LOCAL_BACKUP_DIR"
+22.     CLEANUP_TMPDIR=0
+23. fi
+24. 
+25. echo "[$TIMESTAMP] Starting ECO-IA backup…"
+26. 
+27. # ── 1. PostgreSQL dump ───────────────────────────────────────────────────────
+28. echo "Dumping PostgreSQL database…"
+29. docker exec eco-ia-postgres pg_dump -U eco_ia eco_ia \
+30.     | gzip > "$LOCAL_BACKUP_DIR/${BACKUP_NAME}-db.sql.gz" \
+31.     && echo "✅ Database dump complete." \
+32.     || echo "❌ Database dump FAILED."
+33. 
+34. # ── 2. Configuration backup ──────────────────────────────────────────────────
+35. echo "Backing up configuration…"
+36. tar -czf "$LOCAL_BACKUP_DIR/${BACKUP_NAME}-config.tar.gz" \
+37.     "$ECO_IA_DIR/.env" \
+38.     "$ECO_IA_DIR/config/" \
+39.     2>/dev/null \
+40.     && echo "✅ Config backup complete." \
+41.     || echo "❌ Config backup FAILED."
+42. 
+43. # ── 3. Upload to Hetzner Storage Box ─────────────────────────────────────────
+44. if [[ -n "${HETZNER_STORAGE_BOX_HOST:-}" && -n "${HETZNER_STORAGE_BOX_USER:-}" ]]; then
+45.     echo "Uploading to Hetzner Storage Box…"
+46.     rsync -az --delete \
+47.         -e "ssh -o StrictHostKeyChecking=no -p 23" \
+48.         "$LOCAL_BACKUP_DIR/" \
+49.         "$REMOTE_PATH/" \
+50.         && echo "✅ Upload complete." \
+51.         || echo "❌ Upload FAILED."
+52. else
+53.     echo "⚠  Hetzner Storage Box not configured; keeping local backup only."
+54. fi
+55. 
+56. # ── 4. Clean old local backups ────────────────────────────────────────────────
+57. echo "Cleaning backups older than $RETENTION_DAYS days…"
+58. find "$LOCAL_BACKUP_DIR" -name "eco-ia-backup-*" -mtime "+$RETENTION_DAYS" -delete
+59. echo "✅ Cleanup complete."
+60. 
+61. echo "[$TIMESTAMP] Backup finished: $BACKUP_NAME"
+62. 
+63. # ── 5. Clean up temporary directory if created by mktemp ──────────────────────
+64. if [[ "$CLEANUP_TMPDIR" -eq 1 ]]; then
+65.     rm -rf "$LOCAL_BACKUP_DIR"
+66. fi
+67. 

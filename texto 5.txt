@@ -1,31 +1,46 @@
-[grep content: 24 matches across 5 file(s) under /home/runner/work/ECO-IA/ECO-IA]
-test_api.py:19:     from api.main import create_app
-
-main.py (3 match(es)):
-  13: from api.middleware.auth import APIKeyMiddleware
-  14: from api.middleware.rate_limit import RateLimitMiddleware
-  15: from api.routes import admin, services, webhooks
-
-orchestrator.py (4 match(es)):
-  8: from core.agent_base import AgentBase
-  9: from core.communication import Message, MessageBus
-  10: from core.llm_connector import LLMConnector
-  11: from core.scheduler import TaskScheduler
-completion.py:6: from core.llm_connector import LLMConnector
-
-test_agents.py (15 match(es)):
-  12: from core.communication import Message, MessageBus
-  13: from core.scheduler import TaskScheduler
-  14: from core.llm_connector import LLMConnector
-  16: from agents.monetization.billing import BillingManager
-  17: from agents.monetization.clients import ClientManager
-  18: from agents.monetization.pricing import PricingEngine
-  20: from agents.devops.backup import BackupManager
-  21: from agents.devops.auto_heal import AutoHealer
-  23: from agents.resources.optimizer import ResourceOptimizer
-  24: from agents.resources.scaler import AutoScaler
-  26: from agents.security.firewall import FirewallManager
-  27: from agents.security.intrusion_detector import IntrusionDetector
-  29: from agents.analytics.predictor import Predictor
-  30: from agents.analytics.dashboard import DashboardData
-  31: from agents.analytics.reporter import Reporter
+1. """LLM connector supporting OpenAI and Ollama."""
+2. import logging, os
+3. from typing import Any, Dict, List, Optional
+4. logger = logging.getLogger(__name__)
+5. 
+6. class LLMConnector:
+7.     def __init__(self, provider="openai", model=None, api_key=None, base_url=None,
+8.                  temperature=0.7, max_tokens=2048):
+9.         self.provider = provider.lower(); self.temperature = temperature; self.max_tokens = max_tokens
+10.         if self.provider == "openai":
+11.             self.model = model or "gpt-4o-mini"
+12.             self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+13.             self.base_url = base_url or "https://api.openai.com/v1"
+14.         elif self.provider == "ollama":
+15.             self.model = model or "llama3"; self.api_key = "ollama"
+16.             self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+17.         else:
+18.             raise ValueError(f"Unsupported provider: {provider!r}")
+19.     async def chat(self, messages, system_prompt=None):
+20.         if system_prompt: messages = [{"role": "system", "content": system_prompt}] + list(messages)
+21.         return await self._openai_chat(messages) if self.provider == "openai" else await self._ollama_chat(messages)
+22.     async def complete(self, prompt):
+23.         return await self.chat([{"role": "user", "content": prompt}])
+24.     async def _openai_chat(self, messages):
+25.         try:
+26.             import openai
+27.             client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+28.             r = await client.chat.completions.create(model=self.model, messages=messages,
+29.                 temperature=self.temperature, max_tokens=self.max_tokens)
+30.             return r.choices[0].message.content or ""
+31.         except ImportError: return "[OpenAI not installed]"
+32.         except Exception as e: logger.error("OpenAI error: %s", e); raise
+33.     async def _ollama_chat(self, messages):
+34.         try:
+35.             import httpx
+36.             async with httpx.AsyncClient(timeout=120) as c:
+37.                 r = await c.post(f"{self.base_url}/api/chat",
+38.                     json={"model": self.model, "messages": messages, "stream": False,
+39.                           "options": {"temperature": self.temperature, "num_predict": self.max_tokens}})
+40.                 r.raise_for_status(); return r.json().get("message", {}).get("content", "")
+41.         except ImportError: return "[httpx not installed]"
+42.         except Exception as e: logger.error("Ollama error: %s", e); raise
+43.     def get_info(self):
+44.         return {"provider": self.provider, "model": self.model, "base_url": self.base_url,
+45.                 "temperature": self.temperature, "max_tokens": self.max_tokens}
+46. 

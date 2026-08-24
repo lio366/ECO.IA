@@ -1,94 +1,110 @@
-1. """Hosting service manager — manages hosted environments."""
-2. import logging
-3. import os
-4. from datetime import datetime
-5. from typing import Any, Dict, List, Optional
+1. """Dynamic pricing engine for ECO-IA services."""
+2. 
+3. import logging
+4. from typing import Any, Dict, List, Optional
+5. 
 6. 
 7. logger = logging.getLogger(__name__)
 8. 
-9. HOSTING_PLANS = {
-10.     "basic": {
-11.         "name": "Basic",
-12.         "price_usd": 9.99,
-13.         "cpu_cores": 0.5,
-14.         "ram_gb": 0.5,
+9. 
+10. PLANS: Dict[str, Dict[str, Any]] = {
+11.     "basic": {
+12.         "name": "Basic",
+13.         "base_price_usd": 9.99,
+14.         "api_calls_per_month": 10_000,
 15.         "storage_gb": 10,
-16.         "bandwidth_gb": 100,
-17.         "max_instances": 1,
-18.         "uptime_sla": 99.0,
-19.     },
-20.     "pro": {
-21.         "name": "Pro",
-22.         "price_usd": 49.99,
-23.         "cpu_cores": 2,
-24.         "ram_gb": 2,
-25.         "storage_gb": 100,
-26.         "bandwidth_gb": 1000,
-27.         "max_instances": 5,
-28.         "uptime_sla": 99.9,
-29.     },
-30.     "enterprise": {
-31.         "name": "Enterprise",
-32.         "price_usd": 199.99,
-33.         "cpu_cores": 8,
-34.         "ram_gb": 16,
-35.         "storage_gb": 1000,
-36.         "bandwidth_gb": 10000,
-37.         "max_instances": 20,
-38.         "uptime_sla": 99.99,
-39.     },
-40. }
+16.         "support": "community",
+17.     },
+18.     "pro": {
+19.         "name": "Pro",
+20.         "base_price_usd": 49.99,
+21.         "api_calls_per_month": 100_000,
+22.         "storage_gb": 100,
+23.         "support": "email",
+24.     },
+25.     "enterprise": {
+26.         "name": "Enterprise",
+27.         "base_price_usd": 199.99,
+28.         "api_calls_per_month": 1_000_000,
+29.         "storage_gb": 1_000,
+30.         "support": "dedicated",
+31.     },
+32. }
+33. 
+34. 
+35. class PricingEngine:
+36.     """Computes dynamic pricing based on demand and resource usage."""
+37. 
+38.     def __init__(self, demand_multiplier: float = 1.0) -> None:
+39.         self._demand_multiplier = demand_multiplier
+40.         self._plans = dict(PLANS)
 41. 
-42. 
-43. class HostingManager:
-44.     """Manages hosted service instances for clients."""
+42.     # ------------------------------------------------------------------
+43.     # Price calculation
+44.     # ------------------------------------------------------------------
 45. 
-46.     def __init__(self):
-47.         self._instances: Dict[str, Dict[str, Any]] = {}
-48.         self._server_ip = os.getenv("SERVER_IP", "135.148.232.10")
-49. 
-50.     def get_plans(self) -> List[Dict[str, Any]]:
-51.         """Return all available hosting plans."""
-52.         return [{"plan_key": k, **v} for k, v in HOSTING_PLANS.items()]
-53. 
-54.     def get_plan(self, plan_key: str) -> Optional[Dict[str, Any]]:
-55.         return HOSTING_PLANS.get(plan_key)
-56. 
-57.     def provision_instance(self, client_id: str, plan: str) -> Dict[str, Any]:
-58.         """Provision a hosting instance for a client."""
-59.         plan_config = HOSTING_PLANS.get(plan)
-60.         if not plan_config:
-61.             return {"status": "error", "message": f"Unknown plan: {plan}"}
-62.         instance_id = f"eco-{client_id[:8]}"
-63.         instance = {
-64.             "instance_id": instance_id,
-65.             "client_id": client_id,
-66.             "plan": plan,
-67.             "status": "running",
-68.             "server_ip": self._server_ip,
-69.             "created_at": datetime.utcnow().isoformat(),
-70.             "resources": plan_config,
-71.         }
-72.         self._instances[instance_id] = instance
-73.         logger.info("Provisioned instance %s for client %s (plan: %s)",
-74.                     instance_id, client_id, plan)
-75.         return instance
-76. 
-77.     def get_instance(self, instance_id: str) -> Optional[Dict[str, Any]]:
-78.         return self._instances.get(instance_id)
+46.     def get_price(self, plan: str, usage_pct: float = 0.0) -> float:
+47.         """Calculate the current price for *plan* considering demand.
+48. 
+49.         Args:
+50.             plan: Plan name ("basic", "pro", "enterprise").
+51.             usage_pct: Current server utilisation percentage (0–100).
+52. 
+53.         Returns:
+54.             Adjusted price in USD.
+55.         """
+56.         plan_config = self._plans.get(plan)
+57.         if plan_config is None:
+58.             raise ValueError(f"Unknown plan: {plan!r}")
+59. 
+60.         base = plan_config["base_price_usd"]
+61.         demand_factor = self._compute_demand_factor(usage_pct)
+62.         price = round(base * self._demand_multiplier * demand_factor, 2)
+63.         logger.debug("Price for '%s': base=%.2f demand_factor=%.2f → %.2f", plan, base, demand_factor, price)
+64.         return price
+65. 
+66.     def _compute_demand_factor(self, usage_pct: float) -> float:
+67.         """Return a multiplier based on server utilisation."""
+68.         if usage_pct < 50:
+69.             return 1.0          # normal pricing
+70.         if usage_pct < 75:
+71.             return 1.1          # slight surge
+72.         if usage_pct < 90:
+73.             return 1.25         # surge pricing
+74.         return 1.5              # peak pricing
+75. 
+76.     # ------------------------------------------------------------------
+77.     # Plan management
+78.     # ------------------------------------------------------------------
 79. 
-80.     def list_instances(self, client_id: Optional[str] = None) -> List[Dict[str, Any]]:
-81.         instances = list(self._instances.values())
-82.         if client_id:
-83.             instances = [i for i in instances if i["client_id"] == client_id]
-84.         return instances
-85. 
-86.     def get_service_status(self) -> Dict[str, Any]:
-87.         return {
-88.             "status": "operational",
-89.             "server": self._server_ip,
-90.             "uptime_pct": 99.9,
-91.             "active_instances": len([i for i in self._instances.values() if i["status"] == "running"]),
-92.             "timestamp": datetime.utcnow().isoformat(),
-93.         }
-94. 
+80.     def list_plans(self) -> List[Dict[str, Any]]:
+81.         """Return all available plans with current prices."""
+82.         return [
+83.             {**v, "plan_key": k, "current_price_usd": self.get_price(k)}
+84.             for k, v in self._plans.items()
+85.         ]
+86. 
+87.     def recommend_plan(self, monthly_api_calls: int, storage_gb: int) -> str:
+88.         """Recommend the cheapest plan that covers the given requirements."""
+89.         for plan_key in ("basic", "pro", "enterprise"):
+90.             plan = self._plans[plan_key]
+91.             if (
+92.                 plan["api_calls_per_month"] >= monthly_api_calls
+93.                 and plan["storage_gb"] >= storage_gb
+94.             ):
+95.                 return plan_key
+96.         return "enterprise"
+97. 
+98.     def set_demand_multiplier(self, multiplier: float) -> None:
+99.         """Override the global demand multiplier (1.0 = normal)."""
+100.         if multiplier <= 0:
+101.             raise ValueError("Demand multiplier must be positive.")
+102.         self._demand_multiplier = multiplier
+103.         logger.info("Demand multiplier set to %.2f", multiplier)
+104. 
+105.     def get_pricing_summary(self) -> Dict[str, Any]:
+106.         return {
+107.             "demand_multiplier": self._demand_multiplier,
+108.             "plans": self.list_plans(),
+109.         }
+110. 

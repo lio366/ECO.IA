@@ -1,240 +1,92 @@
-1. # 🤖 ECO-IA — Documentación de Agentes
+1. """Resource optimiser - monitors and optimises CPU/RAM usage."""
 2. 
-3. ## Arquitectura Multi-Agente
-4. 
-5. ```
-6.                     ┌─────────────────────┐
-7.                     │   🧠 ORQUESTADOR    │
-8.                     │   Coordina todo     │
-9.                     └──────┬──────────────┘
-10.                            │ MessageBus
-11.           ┌────────┬───────┼───────┬────────┐
-12.           ▼        ▼       ▼       ▼        ▼
-13.        💰 Monet  🔧 Dev  🌿 Res  🛡️ Sec  📊 Ana
-14. ```
-15. 
-16. ---
-17. 
-18. ## 🧠 Orquestador (`agents/orchestrator/`)
-19. 
-20. **Clase:** `OrchestratorAgent`
-21. 
-22. El agente maestro. Coordina a todos los demás agentes, toma decisiones usando LLM y genera reportes ejecutivos.
-23. 
-24. ### Responsabilidades
-25. - Registrar y monitorear el estado de cada agente
-26. - Enrutar tareas al agente correcto
-27. - Tomar decisiones de alto nivel con OpenAI/Ollama
-28. - Generar reportes ejecutivos cada hora
-29. - Manejar alertas de otros agentes
-30. 
-31. ### Tareas programadas
-32. | Tarea | Intervalo | Descripción |
-33. |-------|-----------|-------------|
-34. | `health_check` | 60s | Ping a todos los agentes |
-35. | `executive_report` | 3600s | Reporte ejecutivo con LLM |
-36. 
-37. ### Configuración (`config.yaml`)
-38. ```yaml
-39. heartbeat_interval: 30
-40. health_check_interval: 60
-41. report_interval: 3600
-42. llm:
-43.   provider: openai
-44.   model: gpt-4o-mini
-45. ```
-46. 
-47. ---
-48. 
-49. ## 💰 Monetización (`agents/monetization/`)
-50. 
-51. Gestiona clientes, facturación Stripe y pricing dinámico.
-52. 
-53. ### Módulos
-54. 
-55. **`PricingEngine`** — Precios dinámicos según demanda
-56. ```python
-57. engine = PricingEngine()
-58. price = engine.get_price('pro', usage_pct=80)  # surge pricing
-59. plans = engine.list_plans()  # basic/pro/enterprise
-60. ```
-61. 
-62. | Plan | Precio base | API calls/mes | Storage |
-63. |------|-------------|---------------|---------|
-64. | Basic | $9.99 | 10,000 | 10 GB |
-65. | Pro | $49.99 | 100,000 | 100 GB |
-66. | Enterprise | $199.99 | 1,000,000 | 1 TB |
-67. 
-68. **`ClientManager`** — CRUD de clientes
-69. ```python
-70. cm = ClientManager()
-71. client = cm.create_client('Nombre', 'email@domain.com', 'pro')
-72. cm.upgrade_plan(client.client_id, 'enterprise')
-73. opps = cm.detect_upsell_opportunities()
-74. ```
-75. 
-76. **`BillingManager`** — Stripe integration
-77. ```python
-78. bm = BillingManager()
-79. customer = await bm.create_customer('email@domain.com', 'Nombre')
-80. subscription = await bm.create_subscription(customer['id'], 'price_xxx')
-81. invoice = await bm.create_invoice(customer['id'], 4999, 'Pro plan')
-82. ```
-83. 
-84. ---
-85. 
-86. ## 🔧 DevOps (`agents/devops/`)
+3. import logging
+4. from typing import Any, Dict, Optional
+5. 
+6. 
+7. logger = logging.getLogger(__name__)
+8. 
+9. 
+10. class ResourceOptimizer:
+11.     """Monitors system resource usage and applies optimisations."""
+12. 
+13.     def __init__(self, cpu_threshold: float = 85.0, ram_threshold: float = 90.0) -> None:
+14.         self.cpu_threshold = cpu_threshold
+15.         self.ram_threshold = ram_threshold
+16. 
+17.     # ------------------------------------------------------------------
+18.     # Metrics
+19.     # ------------------------------------------------------------------
+20. 
+21.     def get_metrics(self) -> Dict[str, Any]:
+22.         """Return current CPU, RAM, and disk metrics."""
+23.         try:
+24.             import psutil  # type: ignore[import]
+25. 
+26.             cpu_pct = psutil.cpu_percent(interval=1)
+27.             ram = psutil.virtual_memory()
+28.             disk = psutil.disk_usage("/")
+29.             net = psutil.net_io_counters()
+30.             return {
+31.                 "cpu_percent": cpu_pct,
+32.                 "ram_percent": ram.percent,
+33.                 "ram_used_gb": round(ram.used / 1024**3, 2),
+34.                 "ram_total_gb": round(ram.total / 1024**3, 2),
+35.                 "disk_percent": disk.percent,
+36.                 "disk_used_gb": round(disk.used / 1024**3, 2),
+37.                 "disk_total_gb": round(disk.total / 1024**3, 2),
+38.                 "net_bytes_sent_mb": round(net.bytes_sent / 1024**2, 2),
+39.                 "net_bytes_recv_mb": round(net.bytes_recv / 1024**2, 2),
+40.             }
+41.         except ImportError:
+42.             logger.warning("psutil not installed; returning simulated metrics.")
+43.             return self._simulate_metrics()
+44. 
+45.     def _simulate_metrics(self) -> Dict[str, Any]:
+46.         import random
+47. 
+48.         return {
+49.             "cpu_percent": round(random.uniform(10, 60), 1),
+50.             "ram_percent": round(random.uniform(30, 70), 1),
+51.             "ram_used_gb": round(random.uniform(1, 6), 2),
+52.             "ram_total_gb": 8.0,
+53.             "disk_percent": round(random.uniform(20, 50), 1),
+54.             "disk_used_gb": round(random.uniform(20, 80), 2),
+55.             "disk_total_gb": 160.0,
+56.             "net_bytes_sent_mb": round(random.uniform(100, 5000), 2),
+57.             "net_bytes_recv_mb": round(random.uniform(100, 5000), 2),
+58.         }
+59. 
+60.     # ------------------------------------------------------------------
+61.     # Analysis
+62.     # ------------------------------------------------------------------
+63. 
+64.     def analyse(self) -> Dict[str, Any]:
+65.         """Analyse current resource usage and return recommendations."""
+66.         metrics = self.get_metrics()
+67.         recommendations = []
+68. 
+69.         if metrics["cpu_percent"] > self.cpu_threshold:
+70.             recommendations.append(
+71.                 f"CPU usage is high ({metrics['cpu_percent']}%). Consider scaling up or optimising workloads."
+72.             )
+73.         if metrics["ram_percent"] > self.ram_threshold:
+74.             recommendations.append(
+75.                 f"RAM usage is high ({metrics['ram_percent']}%). Consider adding swap or scaling RAM."
+76.             )
+77.         if metrics["disk_percent"] > 80:
+78.             recommendations.append(
+79.                 f"Disk usage is high ({metrics['disk_percent']}%). Run cleanup or expand storage."
+80.             )
+81. 
+82.         return {
+83.             "metrics": metrics,
+84.             "status": "warning" if recommendations else "healthy",
+85.             "recommendations": recommendations,
+86.         }
 87. 
-88. Deploy automático, auto-healing y backups.
-89. 
-90. ### Módulos
-91. 
-92. **`AutoHealer`** — Monitorea y reinicia servicios Docker caídos
-93. ```python
-94. healer = AutoHealer(
-95.     services=['eco-ia-api', 'eco-ia-worker', 'eco-ia-postgres'],
-96.     check_interval=60,
-97.     max_restart_attempts=3
-98. )
-99. await healer.start()
-100. ```
-101. 
-102. **`Deployer`** — Gestiona deploys Docker Compose
-103. ```python
-104. deployer = Deployer(compose_file='docker/docker-compose.yml')
-105. deployer.deploy_service('eco-ia-api')
-106. deployer.apply_security_updates()
-107. status = deployer.get_service_status()
-108. ```
-109. 
-110. **`BackupManager`** — Backups a storage remoto vía rsync
-111. ```python
-112. bm = BackupManager(
-113.     local_paths=['/opt/eco-ia/data', '/opt/eco-ia/config'],
-114.     retention_days=30
-115. )
-116. result = bm.run_backup(label='daily')
-117. ```
-118. 
-119. ---
-120. 
-121. ## 🌿 Recursos (`agents/resources/`)
-122. 
-123. Optimización de CPU/RAM, escalado y limpieza.
-124. 
-125. ### Módulos
-126. 
-127. **`ResourceOptimizer`** — Métricas en tiempo real
-128. ```python
-129. opt = ResourceOptimizer(cpu_threshold=85.0, ram_threshold=90.0)
-130. metrics = opt.get_metrics()
-131. # {'cpu_percent': 45.2, 'ram_percent': 62.1, 'disk_percent': 23.5, ...}
-132. analysis = opt.analyse()
-133. # {'status': 'healthy', 'recommendations': [...]}
-134. ```
-135. 
-136. **`AutoScaler`** — Escala réplicas Docker según carga
-137. ```python
-138. scaler = AutoScaler(
-139.     min_replicas=1, max_replicas=10,
-140.     scale_up_cpu_threshold=70.0,
-141.     scale_down_cpu_threshold=30.0
-142. )
-143. scaler.evaluate_and_scale('eco-ia-api', cpu_percent=82.0)
-144. ```
-145. 
-146. **`Cleaner`** — Limpieza automática de logs y artefactos Docker
-147. ```python
-148. cleaner = Cleaner(max_log_age_days=7, max_log_size_mb=100.0)
-149. cleaner.run_all()  # logs + temp + docker prune
-150. ```
-151. 
-152. ---
-153. 
-154. ## 🛡️ Seguridad (`agents/security/`)
-155. 
-156. Firewall dinámico, detección de intrusiones y auditorías.
-157. 
-158. ### Módulos
-159. 
-160. **`FirewallManager`** — Control de UFW
-161. ```python
-162. fw = FirewallManager()
-163. fw.block_ip('1.2.3.4', reason='brute force')
-164. fw.allow_port(8000, 'tcp')
-165. fw.get_status()
-166. ```
-167. 
-168. **`IntrusionDetector`** — Análisis de `/var/log/auth.log`
-169. ```python
-170. detector = IntrusionDetector(brute_force_threshold=10)
-171. threats = detector.analyse_auth_log()
-172. suspicious = detector.get_suspicious_ips()
-173. ```
-174. 
-175. **`SecurityAuditor`** — Auditorías periódicas
-176. ```python
-177. auditor = SecurityAuditor()
-178. report = auditor.run_full_audit()
-179. # checks: puertos abiertos, logins fallidos, sudo usage, world-writable files
-180. ```
-181. 
-182. ---
-183. 
-184. ## 📊 Analytics (`agents/analytics/`)
-185. 
-186. Reportes diarios, predicción de anomalías y dashboard.
-187. 
-188. ### Módulos
-189. 
-190. **`Predictor`** — Detección de anomalías con z-score
-191. ```python
-192. predictor = Predictor(window_size=20, z_score_threshold=2.5)
-193. predictor.record('cpu', 45.2)
-194. is_anomaly, z_score = predictor.is_anomaly('cpu', 95.0)
-195. next_val = predictor.predict_next('cpu')
-196. ```
-197. 
-198. **`DashboardData`** — Agrega métricas para Grafana
-199. ```python
-200. dashboard = DashboardData()
-201. snapshot = dashboard.snapshot(
-202.     resources={'cpu_percent': 30, 'ram_percent': 40},
-203.     monetization={'active_clients': 5, 'monthly_revenue_usd': 499.95},
-204.     security={'total_alerts': 0, 'high_severity': 0}
-205. )
-206. kpis = dashboard.get_kpis()
-207. # system_health: 'healthy' | 'warning' | 'critical'
-208. ```
-209. 
-210. **`Reporter`** — Reportes por email SMTP
-211. ```python
-212. reporter = Reporter(
-213.     smtp_host='smtp.gmail.com',
-214.     smtp_user='tu@gmail.com',
-215.     to_emails=['liogg35@gmail.com']
-216. )
-217. reporter.send_daily_report_email(data)
-218. ```
-219. 
-220. ---
-221. 
-222. ## MessageBus — Comunicación entre agentes
-223. 
-224. ```python
-225. bus = MessageBus()
-226. 
-227. # Suscribir
-228. await bus.subscribe('security', handle_message)
-229. 
-230. # Publicar a un agente específico
-231. await bus.publish(Message(
-232.     sender='orchestrator',
-233.     target='security',
-234.     content={'type': 'audit_request'}
-235. ))
-236. 
-237. # Broadcast a todos
-238. await bus.publish(Message('orchestrator', '*', {'type': 'health_ping'}))
-239. ```
-240. 
+88.     def is_under_pressure(self) -> bool:
+89.         """Return True if the system is under resource pressure."""
+90.         metrics = self.get_metrics()
+91.         return metrics["cpu_percent"] > self.cpu_threshold or metrics["ram_percent"] > self.ram_threshold
+92. 
