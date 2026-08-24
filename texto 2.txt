@@ -1,1 +1,222 @@
-Agent started in background with agent_id: repo-gap-scan. You'll be notified when it completes. Tell the user you're waiting and end your response, or continue unrelated work until notified. The agent supports multi-turn conversations — use write_agent to send follow-up messages.
+1. """🧠 Orchestrator Agent - Master coordinator for all ECO-IA agents."""
+2. 
+3. import asyncio
+4. import logging
+5. from datetime import datetime
+6. from typing import Any, Dict, List, Optional
+7. 
+8. from core.agent_base import AgentBase
+9. from core.communication import Message, MessageBus
+10. from core.llm_connector import LLMConnector
+11. from core.scheduler import TaskScheduler
+12. 
+13. 
+14. logger = logging.getLogger(__name__)
+15. 
+16. 
+17. class OrchestratorAgent(AgentBase):
+18.     """Master agent that coordinates all other agents.
+19. 
+20.     Responsibilities:
+21.     - Monitor the health of every agent.
+22.     - Route tasks to the appropriate specialist agent.
+23.     - Take high-level decisions using an LLM.
+24.     - Generate executive reports.
+25.     - Resolve conflicts between agents.
+26.     """
+27. 
+28.     SYSTEM_PROMPT = (
+29.         "You are the master orchestrator of ECO-IA, an autonomous server system. "
+30.         "Your role is to coordinate specialist agents (Monetization, DevOps, Resources, "
+31.         "Security, Analytics), make high-level decisions, resolve conflicts, and ensure "
+32.         "the system is self-sustaining, generates income, and remains sustainable. "
+33.         "Always respond concisely and provide actionable instructions."
+34.     )
+35. 
+36.     def __init__(
+37.         self,
+38.         message_bus: Optional[MessageBus] = None,
+39.         llm: Optional[LLMConnector] = None,
+40.         config: Optional[Dict[str, Any]] = None,
+41.     ) -> None:
+42.         super().__init__(
+43.             name="orchestrator",
+44.             description="Master coordinator for all ECO-IA agents",
+45.             message_bus=message_bus,
+46.             config=config,
+47.         )
+48.         self.llm = llm
+49.         self.scheduler = TaskScheduler()
+50.         self._agent_registry: Dict[str, Dict[str, Any]] = {}
+51.         self._decisions_log: List[Dict[str, Any]] = []
+52. 
+53.     # ------------------------------------------------------------------
+54.     # Lifecycle
+55.     # ------------------------------------------------------------------
+56. 
+57.     async def on_start(self) -> None:
+58.         self.scheduler.register(
+59.             "health_check",
+60.             self._check_agents_health,
+61.             interval_seconds=self.get_config("health_check_interval", 60),
+62.             description="Periodic health check of all registered agents",
+63.         )
+64.         self.scheduler.register(
+65.             "executive_report",
+66.             self._generate_executive_report,
+67.             interval_seconds=self.get_config("report_interval", 3600),
+68.             description="Hourly executive report",
+69.         )
+70.         await self.scheduler.start()
+71. 
+72.     async def on_stop(self) -> None:
+73.         await self.scheduler.stop()
+74. 
+75.     # ------------------------------------------------------------------
+76.     # Task execution
+77.     # ------------------------------------------------------------------
+78. 
+79.     async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
+80.         """Route a task to the appropriate agent or handle it directly."""
+81.         task_type = task.get("type", "unknown")
+82.         self._logger.info("Orchestrator received task: %s", task_type)
+83. 
+84.         if task_type == "llm_decision":
+85.             return await self._make_llm_decision(task)
+86.         if task_type == "health_report":
+87.             return self._get_health_report()
+88.         if task_type == "register_agent":
+89.             return self._register_agent(task)
+90.         if task_type == "list_agents":
+91.             return {"agents": list(self._agent_registry.values())}
+92. 
+93.         # Default: broadcast to all agents
+94.         await self.send_message("*", task)
+95.         return {"status": "broadcasted", "task": task_type}
+96. 
+97.     # ------------------------------------------------------------------
+98.     # Agent registry
+99.     # ------------------------------------------------------------------
+100. 
+101.     def _register_agent(self, task: Dict[str, Any]) -> Dict[str, Any]:
+102.         agent_name = task.get("agent_name", "unknown")
+103.         self._agent_registry[agent_name] = {
+104.             "name": agent_name,
+105.             "description": task.get("description", ""),
+106.             "registered_at": datetime.utcnow().isoformat(),
+107.             "status": "active",
+108.         }
+109.         self._logger.info("Agent '%s' registered.", agent_name)
+110.         return {"status": "registered", "agent": agent_name}
+111. 
+112.     def _get_health_report(self) -> Dict[str, Any]:
+113.         return {
+114.             "orchestrator": self.health_status(),
+115.             "registered_agents": self._agent_registry,
+116.             "scheduler_tasks": self.scheduler.list_tasks(),
+117.             "recent_decisions": self._decisions_log[-10:],
+118.         }
+119. 
+120.     # ------------------------------------------------------------------
+121.     # Scheduled tasks
+122.     # ------------------------------------------------------------------
+123. 
+124.     async def _check_agents_health(self) -> None:
+125.         self._logger.info("Running agent health check.")
+126.         if self.message_bus:
+127.             health_request = Message(
+128.                 sender=self.name,
+129.                 target="*",
+130.                 content={"type": "health_ping"},
+131.             )
+132.             await self.message_bus.publish(health_request)
+133. 
+134.     async def _generate_executive_report(self) -> None:
+135.         if not self.llm:
+136.             return
+137. 
+138.         context = {
+139.             "agents": list(self._agent_registry.keys()),
+140.             "scheduler_tasks": self.scheduler.list_tasks(),
+141.         }
+142.         prompt = (
+143.             f"Generate a concise executive report for the ECO-IA autonomous server system. "
+144.             f"Current state: {context}. "
+145.             "Include: system health summary, income generation status, resource efficiency, "
+146.             "and top 3 recommended actions."
+147.         )
+148.         try:
+149.             report = await self.llm.complete(prompt)
+150.             decision = {
+151.                 "type": "executive_report",
+152.                 "timestamp": datetime.utcnow().isoformat(),
+153.                 "report": report,
+154.             }
+155.             self._decisions_log.append(decision)
+156.             self._logger.info("Executive report generated.")
+157.         except Exception as exc:  # noqa: BLE001
+158.             self._logger.error("Failed to generate executive report: %s", exc)
+159. 
+160.     # ------------------------------------------------------------------
+161.     # Message handling
+162.     # ------------------------------------------------------------------
+163. 
+164.     async def on_message(self, message: Message) -> None:
+165.         content = message.content
+166.         msg_type = content.get("type")
+167. 
+168.         if msg_type == "health_pong":
+169.             agent_name = content.get("agent_name", message.sender)
+170.             if agent_name in self._agent_registry:
+171.                 self._agent_registry[agent_name]["last_seen"] = datetime.utcnow().isoformat()
+172.                 self._agent_registry[agent_name]["status"] = "active"
+173. 
+174.         elif msg_type == "alert":
+175.             await self._handle_alert(message)
+176. 
+177.     async def _handle_alert(self, message: Message) -> None:
+178.         alert = message.content
+179.         self._logger.warning("Alert from '%s': %s", message.sender, alert.get("message"))
+180.         decision = {
+181.             "type": "alert_response",
+182.             "timestamp": datetime.utcnow().isoformat(),
+183.             "from_agent": message.sender,
+184.             "alert": alert,
+185.         }
+186.         self._decisions_log.append(decision)
+187. 
+188.         if self.llm:
+189.             prompt = (
+190.                 f"An alert was raised by agent '{message.sender}': {alert.get('message')}. "
+191.                 "Provide a brief action plan to resolve it."
+192.             )
+193.             try:
+194.                 action_plan = await self.llm.complete(prompt)
+195.                 self._logger.info("LLM action plan: %s", action_plan)
+196.                 decision["action_plan"] = action_plan
+197.             except Exception as exc:  # noqa: BLE001
+198.                 self._logger.error("LLM error during alert handling: %s", exc)
+199. 
+200.     # ------------------------------------------------------------------
+201.     # LLM decision
+202.     # ------------------------------------------------------------------
+203. 
+204.     async def _make_llm_decision(self, task: Dict[str, Any]) -> Dict[str, Any]:
+205.         if not self.llm:
+206.             return {"error": "LLM not configured"}
+207.         question = task.get("question", "")
+208.         context = task.get("context", "")
+209.         prompt = f"Context: {context}\n\nQuestion: {question}"
+210.         answer = await self.llm.chat(
+211.             [{"role": "user", "content": prompt}],
+212.             system_prompt=self.SYSTEM_PROMPT,
+213.         )
+214.         decision = {
+215.             "type": "llm_decision",
+216.             "timestamp": datetime.utcnow().isoformat(),
+217.             "question": question,
+218.             "answer": answer,
+219.         }
+220.         self._decisions_log.append(decision)
+221.         return decision
+222. 

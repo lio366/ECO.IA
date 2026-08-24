@@ -1,53 +1,64 @@
-.git
-AGENTS.md
-API.md
-ARCHITECTURE.md
-Dockerfile
-Dockerfile.agent
-MONETIZATION.md
-README.md
-SETUP_OVHCLOUD.md
-__init__.py
-agent_base.py
-agents.yaml
-alembic.ini
-auditor.py
-backup.sh
-billing.py
-celery_app.py
-cleaner.py
-clients.py
-communication.py
-completion.py
-config.yaml
-config.yml
-connection.py
-crud.py
-dashboard.py
-docker-compose.yml
-firewall.py
-health_check.sh
-hetzner.env.example
-install.sh
-intrusion_detector.py
-llm_connector.py
-main.py
-manager.py
-models.py
-nginx.conf
-optimizer.py
-orchestrator.py
-predictor.py
-pricing.py
-processor.py
-prometheus.yml
-pyproject.toml
-reporter.py
-requirements.txt
-run_migrations.sh
-scaler.py
-scheduler.py
-settings.py
-setup_firewall.sh
-test_agents.py
-test_api.py
+1. """ECO-IA global settings — OVHcloud US b3-8 | 135.148.232.10."""
+2. import os
+3. from pathlib import Path
+4. 
+5. BASE_DIR = Path(__file__).resolve().parent.parent
+6. 
+7. # General
+8. DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+9. ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
+10. 
+11. # OVHcloud Server
+12. SERVER_IP: str = os.getenv("SERVER_IP", "135.148.232.10")
+13. SERVER_REGION: str = os.getenv("SERVER_REGION", "US-EAST-VA-1")
+14. 
+15. # API
+16. API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
+17. API_PORT: int = int(os.getenv("API_PORT", "8000"))
+18. API_WORKERS: int = int(os.getenv("API_WORKERS", "4"))
+19. ECO_IA_API_KEY: str = os.getenv("ECO_IA_API_KEY", "change-me-in-production")
+20. ECO_IA_ADMIN_KEY: str = os.getenv("ECO_IA_ADMIN_KEY", "change-me-in-production-admin")
+21. CORS_ORIGINS: list = os.getenv("CORS_ORIGINS", "*").split(",")
+22. 
+23. # Database
+24. DATABASE_URL: str = os.getenv("DATABASE_URL", "******localhost:5432/eco_ia")
+25. REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+26. 
+27. # LLM
+28. LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
+29. LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+30. OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+31. OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+32. 
+33. # Stripe
+34. STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+35. STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+36. STRIPE_PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+37. 
+38. # Email
+39. SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+40. SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+41. SMTP_USER: str = os.getenv("SMTP_USER", "")
+42. SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+43. ALERT_EMAILS: list = [e for e in os.getenv("ALERT_EMAILS", "").split(",") if e]
+44. 
+45. # Backup storage (OVHcloud Object Storage or rsync target)
+46. BACKUP_HOST: str = os.getenv("BACKUP_HOST", os.getenv("HETZNER_STORAGE_BOX_HOST", ""))
+47. BACKUP_USER: str = os.getenv("BACKUP_USER", os.getenv("HETZNER_STORAGE_BOX_USER", ""))
+48. # Legacy aliases
+49. HETZNER_STORAGE_BOX_HOST: str = BACKUP_HOST
+50. HETZNER_STORAGE_BOX_USER: str = BACKUP_USER
+51. HETZNER_API_TOKEN: str = os.getenv("HETZNER_API_TOKEN", "")
+52. 
+53. # Monitoring
+54. PROMETHEUS_PORT: int = int(os.getenv("PROMETHEUS_PORT", "9090"))
+55. GRAFANA_PORT: int = int(os.getenv("GRAFANA_PORT", "3000"))
+56. 
+57. # DevOps
+58. COMPOSE_FILE: str = os.getenv("COMPOSE_FILE", str(BASE_DIR / "docker" / "docker-compose.yml"))
+59. BACKUP_RETENTION_DAYS: int = int(os.getenv("BACKUP_RETENTION_DAYS", "30"))
+60. 
+61. # Security
+62. MAX_BRUTE_FORCE_ATTEMPTS: int = int(os.getenv("MAX_BRUTE_FORCE_ATTEMPTS", "10"))
+63. AUTO_BLOCK_INTRUDERS: bool = os.getenv("AUTO_BLOCK_INTRUDERS", "true").lower() == "true"
+64. 

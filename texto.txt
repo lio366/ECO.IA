@@ -1,0 +1,46 @@
+1. """Base class for all ECO-IA agents."""
+2. import asyncio, logging
+3. from abc import ABC, abstractmethod
+4. from datetime import datetime
+5. from typing import Any, Dict, Optional
+6. from .communication import MessageBus, Message
+7. logger = logging.getLogger(__name__)
+8. 
+9. class AgentBase(ABC):
+10.     def __init__(self, name, description, message_bus=None, config=None):
+11.         self.name = name; self.description = description
+12.         self.message_bus = message_bus; self.config = config or {}
+13.         self.is_running = False; self.last_heartbeat = None
+14.         self.tasks_completed = 0; self.tasks_failed = 0
+15.         self._logger = logging.getLogger(f"eco_ia.agents.{name}")
+16.     async def start(self):
+17.         self.is_running = True
+18.         if self.message_bus:
+19.             await self.message_bus.subscribe(self.name, self._handle_message)
+20.         await self.on_start()
+21.         asyncio.create_task(self._heartbeat_loop())
+22.     async def stop(self):
+23.         self.is_running = False; await self.on_stop()
+24.     @abstractmethod
+25.     async def on_start(self): pass
+26.     @abstractmethod
+27.     async def on_stop(self): pass
+28.     @abstractmethod
+29.     async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]: pass
+30.     async def _handle_message(self, message):
+31.         try: await self.on_message(message)
+32.         except Exception as e: self._logger.error("Message error: %s", e)
+33.     async def on_message(self, message): pass
+34.     async def send_message(self, target, content):
+35.         if not self.message_bus: return
+36.         await self.message_bus.publish(Message(sender=self.name, target=target, content=content))
+37.     async def _heartbeat_loop(self):
+38.         interval = self.config.get("heartbeat_interval", 30)
+39.         while self.is_running:
+40.             self.last_heartbeat = datetime.utcnow(); await asyncio.sleep(interval)
+41.     def health_status(self):
+42.         return {"name": self.name, "is_running": self.is_running,
+43.                 "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+44.                 "tasks_completed": self.tasks_completed, "tasks_failed": self.tasks_failed}
+45.     def get_config(self, key, default=None): return self.config.get(key, default)
+46. 

@@ -1,168 +1,447 @@
-1. # 🏗️ ECO-IA — Arquitectura Técnica
+1. """Tests for ECO-IA agents."""
 2. 
-3. ## Stack completo
-4. 
-5. ```
-6. ┌─────────────────────────────────────────────────────────┐
-7. │                 🌐  Internet / Clientes                  │
-8. └─────────────────────┬───────────────────────────────────┘
-9.                       │ HTTPS :443 / HTTP :80
-10.                ┌──────▼──────┐
-11.                │    Nginx    │  (reverse proxy + rate limit)
-12.                └──────┬──────┘
-13.                       │ :8000
-14.           ┌───────────▼───────────┐
-15.           │    ECO-IA FastAPI     │  Python 3.12
-16.           │    REST API :8000     │  Uvicorn + 4 workers
-17.           └───────────┬───────────┘
-18.                       │
-19.          ┌────────────▼────────────┐
-20.          │   🧠 ORQUESTADOR        │  OrchestratorAgent
-21.          │   LLM: GPT-4o-mini      │  MessageBus async
-22.          └────┬───┬───┬───┬───┬───┘
-23.               │   │   │   │   │
-24.     ┌─────────┤ ┌─┤ ┌─┤ ┌─┤ ┌─┤
-25.     │ 💰 Monet│ │🔧│ │🌿│ │🛡│ │📊│
-26.     └─────────┘ └─┘ └─┘ └─┘ └─┘
-27.               │
-28.     ┌─────────▼──────────────────────────┐
-29.     │         Capa de datos              │
-30.     │  PostgreSQL :5432  Redis :6379     │
-31.     └────────────────────────────────────┘
-32.               │
-33.     ┌─────────▼──────────────────────────┐
-34.     │         Monitoreo                  │
-35.     │  Prometheus :9090  Grafana :3000   │
-36.     │  AlertManager :9093                │
-37.     └────────────────────────────────────┘
-38. ```
-39. 
-40. ---
+3. import asyncio
+4. import sys
+5. import os
+6. 
+7. # Ensure project root is on the path
+8. sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+9. 
+10. import pytest
+11. 
+12. from core.communication import Message, MessageBus
+13. from core.scheduler import TaskScheduler
+14. from core.llm_connector import LLMConnector
+15. 
+16. from agents.monetization.billing import BillingManager
+17. from agents.monetization.clients import ClientManager
+18. from agents.monetization.pricing import PricingEngine
+19. 
+20. from agents.devops.backup import BackupManager
+21. from agents.devops.auto_heal import AutoHealer
+22. 
+23. from agents.resources.optimizer import ResourceOptimizer
+24. from agents.resources.scaler import AutoScaler
+25. 
+26. from agents.security.firewall import FirewallManager
+27. from agents.security.intrusion_detector import IntrusionDetector
+28. 
+29. from agents.analytics.predictor import Predictor
+30. from agents.analytics.dashboard import DashboardData
+31. from agents.analytics.reporter import Reporter
+32. 
+33. 
+34. # ──────────────────────────────────────────────────────────────────────────────
+35. # Core – MessageBus
+36. # ──────────────────────────────────────────────────────────────────────────────
+37. 
+38. class TestMessageBus:
+39.     def setup_method(self):
+40.         self.bus = MessageBus()
 41. 
-42. ## Componentes
-43. 
-44. ### FastAPI — REST API
+42.     @pytest.mark.asyncio
+43.     async def test_publish_and_subscribe(self):
+44.         received = []
 45. 
-46. - **Framework:** FastAPI 0.115 + Uvicorn 0.34
-47. - **Workers:** 4 procesos Uvicorn
-48. - **Auth:** API Keys con `hmac.compare_digest` (anti-timing)
-49. - **Rate Limit:** 100 req/min por IP (sliding window)
-50. - **CORS:** Configurable vía `CORS_ORIGINS`
-51. 
-52. ### Agentes IA — Multi-Agent System
-53. 
-54. - **Comunicación:** `MessageBus` async pub/sub en memoria
-55. - **Base:** `AgentBase` ABC con lifecycle hooks
-56. - **Scheduler:** `TaskScheduler` asyncio — tareas periódicas
-57. - **LLM:** `LLMConnector` — OpenAI o Ollama (self-hosted)
-58. 
-59. ### Celery — Task Queue
-60. 
-61. - **Broker:** Redis
-62. - **Workers:** `eco-ia-worker` (4 concurrencias)
-63. - **Beat:** `eco-ia-beat` (scheduler distribuido)
-64. 
-65. ### Base de datos
+46.         async def handler(msg: Message):
+47.             received.append(msg)
+48. 
+49.         await self.bus.subscribe("agent_a", handler)
+50.         msg = Message(sender="agent_b", target="agent_a", content={"type": "ping"})
+51.         await self.bus.publish(msg)
+52. 
+53.         assert len(received) == 1
+54.         assert received[0].content["type"] == "ping"
+55. 
+56.     @pytest.mark.asyncio
+57.     async def test_broadcast(self):
+58.         received = []
+59. 
+60.         async def handler(msg: Message):
+61.             received.append(msg)
+62. 
+63.         await self.bus.subscribe("agent_a", handler)
+64.         msg = Message(sender="orchestrator", target="*", content={"type": "broadcast"})
+65.         await self.bus.publish(msg)
 66. 
-67. - **PostgreSQL 15:** datos persistentes (clientes, facturas, logs)
-68. - **Redis 7:** cache, sesiones, Celery broker
-69. 
-70. ### Monitoreo
-71. 
-72. - **Prometheus:** métricas de API, sistema, Docker
-73. - **Grafana:** dashboards visuales
-74. - **AlertManager:** alertas por email SMTP
-75. 
-76. ---
+67.         assert len(received) == 1
+68. 
+69.     def test_get_stats(self):
+70.         stats = self.bus.get_stats()
+71.         assert "total_messages" in stats
+72.         assert "subscribers" in stats
+73. 
+74.     def test_get_history(self):
+75.         history = self.bus.get_history()
+76.         assert isinstance(history, list)
 77. 
-78. ## Flujo de una request
-79. 
-80. ```
-81. Cliente
-82.   → Nginx (rate limit, proxy)
-83.     → FastAPI (auth middleware)
-84.       → Route handler
-85.         → Agent / Service
-86.           → LLM / Stripe / DB
-87.         ← Response
-88.       ← JSON
-89.     ← HTTP
-90.   ← Response
-91. ```
-92. 
-93. ---
-94. 
-95. ## Seguridad
-96. 
-97. | Capa | Mecanismo |
-98. |------|-----------|
-99. | Red | UFW firewall (puertos 22, 80, 443, 8000, 3000, 9090) |
-100. | SSH | Fail2Ban + SSH key only |
-101. | API | HMAC API keys, rate limiting 100 req/min |
-102. | Webhooks | HMAC-SHA256 signature verification |
-103. | Firewall dinámico | Auto-block IPs maliciosas (10 intentos) |
-104. | Contenedores | Usuario no-root (`ecouser`) |
-105. | Secrets | `.env` excluido de git, permisos 600 |
-106. | IP validation | Octetos 0-255 + CIDR max /32 |
+78. 
+79. # ──────────────────────────────────────────────────────────────────────────────
+80. # Core – TaskScheduler
+81. # ──────────────────────────────────────────────────────────────────────────────
+82. 
+83. class TestTaskScheduler:
+84.     def setup_method(self):
+85.         self.scheduler = TaskScheduler()
+86. 
+87.     def test_register_and_list(self):
+88.         async def dummy():
+89.             pass
+90. 
+91.         self.scheduler.register("task1", dummy, 60, "Test task")
+92.         tasks = self.scheduler.list_tasks()
+93.         assert len(tasks) == 1
+94.         assert tasks[0]["task_id"] == "task1"
+95. 
+96.     def test_unregister(self):
+97.         async def dummy():
+98.             pass
+99. 
+100.         self.scheduler.register("task2", dummy, 30)
+101.         removed = self.scheduler.unregister("task2")
+102.         assert removed is True
+103.         assert not self.scheduler.list_tasks()
+104. 
+105.     def test_unregister_nonexistent(self):
+106.         assert self.scheduler.unregister("nonexistent") is False
 107. 
-108. ---
-109. 
-110. ## Servidor OVHcloud b3-8
-111. 
-112. | Recurso | Especificación |
-113. |---------|---------------|
-114. | CPU | 3 vCores |
-115. | RAM | 8 GB |
-116. | Disco | 48 GB SSD |
-117. | Red | 500 Mbit público |
-118. | OS | Ubuntu 24.04 LTS |
-119. | IP | 135.148.232.10 |
-120. | Región | Virginia US-EAST-VA-1 |
-121. 
-122. ### Distribución de recursos
+108. 
+109. # ──────────────────────────────────────────────────────────────────────────────
+110. # Core – LLMConnector
+111. # ──────────────────────────────────────────────────────────────────────────────
+112. 
+113. class TestLLMConnector:
+114.     def test_openai_init(self):
+115.         llm = LLMConnector(provider="openai", model="gpt-4o-mini")
+116.         assert llm.provider == "openai"
+117.         assert llm.model == "gpt-4o-mini"
+118. 
+119.     def test_ollama_init(self):
+120.         llm = LLMConnector(provider="ollama", model="llama3")
+121.         assert llm.provider == "ollama"
+122.         assert llm.model == "llama3"
 123. 
-124. | Servicio | RAM estimada |
-125. |---------|-------------|
-126. | eco-ia-api (x4) | ~800 MB |
-127. | eco-ia-worker | ~300 MB |
-128. | eco-ia-beat | ~150 MB |
-129. | PostgreSQL | ~512 MB |
-130. | Redis | ~256 MB |
-131. | Prometheus | ~256 MB |
-132. | Grafana | ~256 MB |
-133. | Nginx | ~50 MB |
-134. | **Total** | **~2.6 GB** |
-135. | **Disponible** | **~5.4 GB libre** |
-136. 
-137. ---
+124.     def test_invalid_provider(self):
+125.         with pytest.raises(ValueError, match="Unsupported LLM provider"):
+126.             LLMConnector(provider="unknown")
+127. 
+128.     def test_get_info(self):
+129.         llm = LLMConnector(provider="openai")
+130.         info = llm.get_info()
+131.         assert info["provider"] == "openai"
+132.         assert "model" in info
+133. 
+134. 
+135. # ──────────────────────────────────────────────────────────────────────────────
+136. # Monetization – ClientManager
+137. # ──────────────────────────────────────────────────────────────────────────────
 138. 
-139. ## Docker Compose — Servicios
-140. 
-141. ```yaml
-142. services:
-143.   eco-ia-api      # FastAPI REST API
-144.   eco-ia-worker   # Celery worker (tareas async)
-145.   eco-ia-beat     # Celery beat (scheduler)
-146.   postgres        # PostgreSQL 15
-147.   redis           # Redis 7
-148.   nginx           # Reverse proxy
-149.   prometheus      # Métricas
-150.   grafana         # Dashboards
-151.   alertmanager    # Alertas email
-152.   node-exporter   # Métricas del host
-153. ```
-154. 
-155. ---
-156. 
-157. ## Variables de entorno críticas
-158. 
-159. ```bash
-160. SERVER_IP=135.148.232.10
-161. ECO_IA_API_KEY=           # openssl rand -hex 32
-162. ECO_IA_ADMIN_KEY=         # openssl rand -hex 32
-163. POSTGRES_PASSWORD=        # password fuerte
-164. OPENAI_API_KEY=           # sk-...
-165. STRIPE_SECRET_KEY=        # sk_live_...
-166. GF_SECURITY_ADMIN_PASSWORD=
-167. ```
-168. 
+139. class TestClientManager:
+140.     def setup_method(self):
+141.         self.manager = ClientManager()
+142. 
+143.     def test_create_client(self):
+144.         client = self.manager.create_client("Alice", "alice@example.com", plan="pro")
+145.         assert client.name == "Alice"
+146.         assert client.plan == "pro"
+147.         assert client.is_active
+148. 
+149.     def test_list_clients(self):
+150.         self.manager.create_client("Bob", "bob@example.com")
+151.         clients = self.manager.list_clients()
+152.         assert len(clients) >= 1
+153. 
+154.     def test_deactivate_client(self):
+155.         client = self.manager.create_client("Carol", "carol@example.com")
+156.         result = self.manager.deactivate_client(client.client_id)
+157.         assert result is True
+158.         active = self.manager.list_clients(active_only=True)
+159.         assert all(c.client_id != client.client_id for c in active)
+160. 
+161.     def test_upgrade_plan(self):
+162.         client = self.manager.create_client("Dave", "dave@example.com", plan="basic")
+163.         self.manager.upgrade_plan(client.client_id, "enterprise")
+164.         updated = self.manager.get_client(client.client_id)
+165.         assert updated.plan == "enterprise"
+166. 
+167.     def test_upsell_opportunities(self):
+168.         client = self.manager.create_client("Eve", "eve@example.com", plan="basic")
+169.         client.monthly_spend = 100.0
+170.         opportunities = self.manager.detect_upsell_opportunities()
+171.         assert any(o["client_id"] == client.client_id for o in opportunities)
+172. 
+173.     def test_summary(self):
+174.         summary = self.manager.get_summary()
+175.         assert "total_clients" in summary
+176.         assert "active_clients" in summary
+177. 
+178. 
+179. # ──────────────────────────────────────────────────────────────────────────────
+180. # Monetization – PricingEngine
+181. # ──────────────────────────────────────────────────────────────────────────────
+182. 
+183. class TestPricingEngine:
+184.     def setup_method(self):
+185.         self.engine = PricingEngine()
+186. 
+187.     def test_get_price_basic(self):
+188.         price = self.engine.get_price("basic")
+189.         assert price == 9.99
+190. 
+191.     def test_get_price_unknown_plan(self):
+192.         with pytest.raises(ValueError, match="Unknown plan"):
+193.             self.engine.get_price("unknown")
+194. 
+195.     def test_surge_pricing(self):
+196.         normal = self.engine.get_price("pro", usage_pct=40)
+197.         surge = self.engine.get_price("pro", usage_pct=95)
+198.         assert surge > normal
+199. 
+200.     def test_list_plans(self):
+201.         plans = self.engine.list_plans()
+202.         assert len(plans) == 3
+203.         plan_keys = {p["plan_key"] for p in plans}
+204.         assert {"basic", "pro", "enterprise"}.issubset(plan_keys)
+205. 
+206.     def test_recommend_plan(self):
+207.         plan = self.engine.recommend_plan(monthly_api_calls=5_000, storage_gb=5)
+208.         assert plan == "basic"
+209. 
+210.         plan = self.engine.recommend_plan(monthly_api_calls=500_000, storage_gb=500)
+211.         assert plan == "enterprise"
+212. 
+213.     def test_demand_multiplier(self):
+214.         self.engine.set_demand_multiplier(2.0)
+215.         price = self.engine.get_price("basic")
+216.         assert abs(price - 9.99 * 2.0) < 0.01
+217. 
+218.     def test_invalid_multiplier(self):
+219.         with pytest.raises(ValueError, match="positive"):
+220.             self.engine.set_demand_multiplier(-1)
+221. 
+222. 
+223. # ──────────────────────────────────────────────────────────────────────────────
+224. # Monetization – BillingManager (simulation mode)
+225. # ──────────────────────────────────────────────────────────────────────────────
+226. 
+227. class TestBillingManager:
+228.     def setup_method(self):
+229.         self.billing = BillingManager(stripe_api_key="")
+230. 
+231.     @pytest.mark.asyncio
+232.     async def test_create_customer_simulated(self):
+233.         result = await self.billing.create_customer("test@example.com", "Test User")
+234.         assert "id" in result
+235. 
+236.     @pytest.mark.asyncio
+237.     async def test_create_invoice_simulated(self):
+238.         result = await self.billing.create_invoice("cus_sim", 999, "Test invoice")
+239.         assert "id" in result
+240. 
+241.     def test_revenue_summary(self):
+242.         summary = self.billing.get_revenue_summary()
+243.         assert "total_invoices" in summary
+244. 
+245. 
+246. # ──────────────────────────────────────────────────────────────────────────────
+247. # DevOps – BackupManager
+248. # ──────────────────────────────────────────────────────────────────────────────
+249. 
+250. class TestBackupManager:
+251.     def setup_method(self):
+252.         self.backup = BackupManager()  # no storage box configured → simulation
+253. 
+254.     def test_run_backup_simulated(self):
+255.         result = self.backup.run_backup(label="test")
+256.         assert result["status"] in ("simulated", "success", "partial")
+257.         assert "backup_name" in result
+258. 
+259.     def test_list_backups(self):
+260.         self.backup.run_backup()
+261.         backups = self.backup.list_backups()
+262.         assert len(backups) >= 1
+263. 
+264.     def test_get_latest_backup(self):
+265.         self.backup.run_backup()
+266.         latest = self.backup.get_latest_backup()
+267.         assert latest is not None
+268. 
+269. 
+270. # ──────────────────────────────────────────────────────────────────────────────
+271. # Resources – ResourceOptimizer
+272. # ──────────────────────────────────────────────────────────────────────────────
+273. 
+274. class TestResourceOptimizer:
+275.     def setup_method(self):
+276.         self.optimizer = ResourceOptimizer()
+277. 
+278.     def test_get_metrics_returns_dict(self):
+279.         metrics = self.optimizer.get_metrics()
+280.         assert isinstance(metrics, dict)
+281.         assert "cpu_percent" in metrics
+282.         assert "ram_percent" in metrics
+283. 
+284.     def test_analyse(self):
+285.         result = self.optimizer.analyse()
+286.         assert "metrics" in result
+287.         assert "status" in result
+288.         assert "recommendations" in result
+289. 
+290.     def test_is_under_pressure_returns_bool(self):
+291.         assert isinstance(self.optimizer.is_under_pressure(), bool)
+292. 
+293. 
+294. # ──────────────────────────────────────────────────────────────────────────────
+295. # Security – FirewallManager
+296. # ──────────────────────────────────────────────────────────────────────────────
+297. 
+298. class TestFirewallManager:
+299.     def setup_method(self):
+300.         self.fw = FirewallManager()
+301. 
+302.     def test_block_invalid_ip_raises(self):
+303.         with pytest.raises(ValueError, match="Invalid IP"):
+304.             self.fw.block_ip("not-an-ip")
+305. 
+306.     def test_unblock_invalid_ip_raises(self):
+307.         with pytest.raises(ValueError, match="Invalid IP"):
+308.             self.fw.unblock_ip("not-an-ip-address")
+309. 
+310.     def test_allow_port_invalid(self):
+311.         with pytest.raises(ValueError, match="Invalid port"):
+312.             self.fw.allow_port(0)
+313. 
+314.     def test_allow_port_invalid_protocol(self):
+315.         with pytest.raises(ValueError, match="Invalid protocol"):
+316.             self.fw.allow_port(80, protocol="ftp")
+317. 
+318.     def test_valid_ip_format(self):
+319.         # UFW will fail but the method should accept the IP format
+320.         result = self.fw.block_ip("192.168.1.100", reason="test")
+321.         assert result["ip"] == "192.168.1.100"
+322. 
+323. 
+324. # ──────────────────────────────────────────────────────────────────────────────
+325. # Security – IntrusionDetector
+326. # ──────────────────────────────────────────────────────────────────────────────
+327. 
+328. class TestIntrusionDetector:
+329.     def setup_method(self):
+330.         self.detector = IntrusionDetector(auth_log_path="/nonexistent/auth.log")
+331. 
+332.     def test_analyse_missing_log(self):
+333.         threats = self.detector.analyse_auth_log()
+334.         assert threats == []
+335. 
+336.     def test_get_summary(self):
+337.         summary = self.detector.get_summary()
+338.         assert "total_alerts" in summary
+339.         assert "suspicious_ips" in summary
+340. 
+341.     def test_get_alerts_empty(self):
+342.         alerts = self.detector.get_alerts()
+343.         assert isinstance(alerts, list)
+344. 
+345. 
+346. # ──────────────────────────────────────────────────────────────────────────────
+347. # Analytics – Predictor
+348. # ──────────────────────────────────────────────────────────────────────────────
+349. 
+350. class TestPredictor:
+351.     def setup_method(self):
+352.         self.predictor = Predictor(window_size=10, z_score_threshold=2.0)
+353. 
+354.     def test_record_and_predict(self):
+355.         for v in [1.0, 1.1, 1.0, 0.9, 1.0, 1.1, 1.0, 0.9]:
+356.             self.predictor.record("cpu", v)
+357.         prediction = self.predictor.predict_next("cpu")
+358.         assert prediction is not None
+359. 
+360.     def test_no_anomaly_normal_values(self):
+361.         for v in [50.0, 51.0, 50.5, 49.5, 50.0, 51.0]:
+362.             self.predictor.record("ram", v)
+363.         anomaly, _ = self.predictor.is_anomaly("ram", 50.5)
+364.         assert anomaly is False
+365. 
+366.     def test_anomaly_detected(self):
+367.         for v in [10.0, 11.0, 9.5, 10.5, 10.0, 11.0, 9.5, 10.5]:
+368.             self.predictor.record("metric", v)
+369.         anomaly, z_score = self.predictor.is_anomaly("metric", 100.0)
+370.         assert anomaly is True
+371.         assert z_score is not None and z_score > 2.0
+372. 
+373.     def test_check_and_alert(self):
+374.         for v in [5.0] * 8:
+375.             self.predictor.record("disk", v)
+376.         alert = self.predictor.check_and_alert("disk", 999.0)
+377.         assert alert is not None
+378.         assert alert["metric"] == "disk"
+379. 
+380.     def test_get_series_stats(self):
+381.         self.predictor.record("temp", 42.0)
+382.         stats = self.predictor.get_series_stats("temp")
+383.         assert stats["count"] == 1
+384. 
+385. 
+386. # ──────────────────────────────────────────────────────────────────────────────
+387. # Analytics – DashboardData
+388. # ──────────────────────────────────────────────────────────────────────────────
+389. 
+390. class TestDashboardData:
+391.     def setup_method(self):
+392.         self.dashboard = DashboardData()
+393. 
+394.     def test_snapshot_and_latest(self):
+395.         self.dashboard.snapshot(resources={"cpu_percent": 40})
+396.         latest = self.dashboard.get_latest()
+397.         assert latest is not None
+398.         assert latest["resources"]["cpu_percent"] == 40
+399. 
+400.     def test_get_history(self):
+401.         for i in range(5):
+402.             self.dashboard.snapshot(resources={"cpu_percent": i * 10})
+403.         history = self.dashboard.get_history(limit=3)
+404.         assert len(history) == 3
+405. 
+406.     def test_get_kpis_no_data(self):
+407.         kpis = self.dashboard.get_kpis()
+408.         assert kpis["status"] == "no_data"
+409. 
+410.     def test_get_kpis_with_data(self):
+411.         self.dashboard.snapshot(
+412.             resources={"cpu_percent": 30, "ram_percent": 50, "disk_percent": 20},
+413.             monetization={"active_clients": 5, "monthly_revenue_usd": 249.95},
+414.             security={"total_alerts": 0},
+415.         )
+416.         kpis = self.dashboard.get_kpis()
+417.         assert kpis["active_clients"] == 5
+418.         assert kpis["system_health"] == "healthy"
+419. 
+420. 
+421. # ──────────────────────────────────────────────────────────────────────────────
+422. # Analytics – Reporter
+423. # ──────────────────────────────────────────────────────────────────────────────
+424. 
+425. class TestReporter:
+426.     def setup_method(self):
+427.         self.reporter = Reporter()
+428. 
+429.     def test_generate_daily_report(self):
+430.         report = self.reporter.generate_daily_report({"active_clients": 10, "revenue": 500})
+431.         assert report["type"] == "daily"
+432.         assert "summary" in report
+433. 
+434.     def test_generate_alert_report(self):
+435.         report = self.reporter.generate_alert_report({"message": "High CPU", "severity": "high"})
+436.         assert report["type"] == "alert"
+437. 
+438.     def test_send_email_no_config(self):
+439.         # No SMTP configured → should return False without raising
+440.         result = self.reporter.send_email("Test", "Body", to=["admin@example.com"])
+441.         assert result is False
+442. 
+443.     def test_get_reports(self):
+444.         self.reporter.generate_daily_report({})
+445.         reports = self.reporter.get_reports()
+446.         assert len(reports) >= 1
+447. 

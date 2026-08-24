@@ -1,76 +1,200 @@
-1. orchestrator:
-2.   heartbeat_interval: 30
-3.   health_check_interval: 60
-4.   report_interval: 3600
-5.   llm:
-6.     provider: openai
-7.     model: gpt-4o-mini
-8.     temperature: 0.7
-9.     max_tokens: 2048
+1. """Tests for ECO-IA API."""
+2. 
+3. import sys
+4. import os
+5. 
+6. sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+7. 
+8. import pytest
+9. from fastapi.testclient import TestClient
 10. 
-11. monetization:
-12.   billing:
-13.     currency: usd
-14.     trial_days: 14
-15.   pricing:
-16.     demand_multiplier: 1.0
-17.     update_interval: 300
-18.   clients:
-19.     upsell_check_interval: 86400
-20. 
-21. devops:
-22.   auto_heal:
-23.     check_interval: 60
-24.     max_restart_attempts: 3
-25.     services:
-26.       - eco-ia-api
-27.       - eco-ia-worker
-28.       - eco-ia-beat
-29.       - eco-ia-postgres
-30.       - eco-ia-redis
-31.       - eco-ia-nginx
-32.       - eco-ia-prometheus
-33.       - eco-ia-grafana
-34.   backup:
-35.     interval: 3600
-36.     retention_days: 30
-37.     local_paths:
-38.       - /opt/eco-ia/data
-39.       - /opt/eco-ia/config
-40.   updates:
-41.     security_update_interval: 86400
-42. 
-43. resources:
-44.   optimizer:
-45.     cpu_threshold: 85.0
-46.     ram_threshold: 90.0
-47.   scaler:
-48.     min_replicas: 1
-49.     max_replicas: 10
-50.     scale_up_cpu_threshold: 70.0
-51.     scale_down_cpu_threshold: 30.0
-52.   cleaner:
-53.     max_log_age_days: 7
-54.     max_log_size_mb: 100.0
-55.     cleanup_interval: 86400
-56. 
-57. security:
-58.   firewall:
-59.     allowed_ports: [22, 80, 443, 8000, 9090, 3000]
-60.     block_on_intrusion: true
-61.   intrusion_detector:
-62.     threshold_minutes: 5
-63.     brute_force_threshold: 10
-64.     check_interval: 300
-65.   auditor:
-66.     audit_interval: 3600
+11. 
+12. @pytest.fixture
+13. def client():
+14.     # Set test keys before importing the app
+15.     os.environ["ECO_IA_API_KEY"] = "test-api-key"
+16.     os.environ["ECO_IA_ADMIN_KEY"] = "test-admin-key"
+17.     os.environ["DEBUG"] = "true"
+18. 
+19.     from api.main import create_app
+20.     app = create_app()
+21.     return TestClient(app)
+22. 
+23. 
+24. # ──────────────────────────────────────────────────────────────────────────────
+25. # Public endpoints
+26. # ──────────────────────────────────────────────────────────────────────────────
+27. 
+28. class TestPublicEndpoints:
+29.     def test_root(self, client):
+30.         response = client.get("/")
+31.         assert response.status_code == 200
+32.         data = response.json()
+33.         assert data["status"] == "ok"
+34.         assert data["system"] == "ECO-IA"
+35. 
+36.     def test_health(self, client):
+37.         response = client.get("/health")
+38.         assert response.status_code == 200
+39.         assert response.json()["status"] == "healthy"
+40. 
+41.     def test_openapi_docs(self, client):
+42.         response = client.get("/docs")
+43.         assert response.status_code == 200
+44. 
+45.     def test_openapi_json(self, client):
+46.         response = client.get("/openapi.json")
+47.         assert response.status_code == 200
+48.         schema = response.json()
+49.         assert schema["info"]["title"] == "ECO-IA API"
+50. 
+51. 
+52. # ──────────────────────────────────────────────────────────────────────────────
+53. # Authentication
+54. # ──────────────────────────────────────────────────────────────────────────────
+55. 
+56. class TestAuthentication:
+57.     def test_service_endpoint_requires_api_key(self, client):
+58.         response = client.get("/api/v1/services/hosting/plans")
+59.         assert response.status_code == 401
+60. 
+61.     def test_service_endpoint_with_valid_key(self, client):
+62.         response = client.get(
+63.             "/api/v1/services/hosting/plans",
+64.             headers={"X-API-Key": "test-api-key"},
+65.         )
+66.         assert response.status_code == 200
 67. 
-68. analytics:
-69.   reporter:
-70.     daily_report_hour: 8
-71.   predictor:
-72.     window_size: 20
-73.     z_score_threshold: 2.5
-74.   dashboard:
-75.     snapshot_interval: 60
-76. 
+68.     def test_service_endpoint_with_invalid_key(self, client):
+69.         response = client.get(
+70.             "/api/v1/services/hosting/plans",
+71.             headers={"X-API-Key": "wrong-key"},
+72.         )
+73.         assert response.status_code == 401
+74. 
+75.     def test_admin_endpoint_requires_admin_key(self, client):
+76.         response = client.get("/api/v1/admin/health")
+77.         assert response.status_code == 403
+78. 
+79.     def test_admin_endpoint_with_valid_key(self, client):
+80.         response = client.get(
+81.             "/api/v1/admin/health",
+82.             headers={"X-Admin-Key": "test-admin-key"},
+83.         )
+84.         assert response.status_code == 200
+85. 
+86.     def test_admin_endpoint_api_key_not_sufficient(self, client):
+87.         response = client.get(
+88.             "/api/v1/admin/health",
+89.             headers={"X-API-Key": "test-api-key"},
+90.         )
+91.         assert response.status_code == 403
+92. 
+93. 
+94. # ──────────────────────────────────────────────────────────────────────────────
+95. # Services endpoints
+96. # ──────────────────────────────────────────────────────────────────────────────
+97. 
+98. class TestServiceEndpoints:
+99.     API_HEADERS = {"X-API-Key": "test-api-key"}
+100. 
+101.     def test_hosting_plans(self, client):
+102.         response = client.get("/api/v1/services/hosting/plans", headers=self.API_HEADERS)
+103.         assert response.status_code == 200
+104.         data = response.json()
+105.         assert "plans" in data
+106.         assert len(data["plans"]) == 3
+107. 
+108.     def test_hosting_status(self, client):
+109.         response = client.get("/api/v1/services/hosting/status", headers=self.API_HEADERS)
+110.         assert response.status_code == 200
+111.         data = response.json()
+112.         assert data["status"] == "operational"
+113. 
+114.     def test_data_process(self, client):
+115.         response = client.post(
+116.             "/api/v1/services/data/process",
+117.             headers=self.API_HEADERS,
+118.             json={"data": {"key": "value"}, "operation": "summarize"},
+119.         )
+120.         assert response.status_code == 200
+121.         data = response.json()
+122.         assert data["status"] == "processed"
+123.         assert data["operation"] == "summarize"
+124. 
+125. 
+126. # ──────────────────────────────────────────────────────────────────────────────
+127. # Admin endpoints
+128. # ──────────────────────────────────────────────────────────────────────────────
+129. 
+130. class TestAdminEndpoints:
+131.     ADMIN_HEADERS = {"X-Admin-Key": "test-admin-key"}
+132. 
+133.     def test_health(self, client):
+134.         response = client.get("/api/v1/admin/health", headers=self.ADMIN_HEADERS)
+135.         assert response.status_code == 200
+136.         data = response.json()
+137.         assert data["status"] == "healthy"
+138.         assert "agents" in data
+139. 
+140.     def test_metrics(self, client):
+141.         response = client.get("/api/v1/admin/metrics", headers=self.ADMIN_HEADERS)
+142.         assert response.status_code == 200
+143.         data = response.json()
+144.         assert "cpu_percent" in data
+145.         assert "ram_percent" in data
+146. 
+147.     def test_list_agents(self, client):
+148.         response = client.get("/api/v1/admin/agents", headers=self.ADMIN_HEADERS)
+149.         assert response.status_code == 200
+150.         data = response.json()
+151.         assert "agents" in data
+152.         assert data["total"] == 6
+153. 
+154.     def test_scheduler_tasks(self, client):
+155.         response = client.get("/api/v1/admin/scheduler/tasks", headers=self.ADMIN_HEADERS)
+156.         assert response.status_code == 200
+157.         data = response.json()
+158.         assert "tasks" in data
+159.         assert len(data["tasks"]) > 0
+160. 
+161. 
+162. # ──────────────────────────────────────────────────────────────────────────────
+163. # Webhook endpoints
+164. # ──────────────────────────────────────────────────────────────────────────────
+165. 
+166. class TestWebhookEndpoints:
+167.     def test_stripe_webhook_invalid_json(self, client):
+168.         response = client.post(
+169.             "/api/v1/webhooks/stripe",
+170.             content=b"not-json",
+171.             headers={"Content-Type": "application/json"},
+172.         )
+173.         assert response.status_code == 400
+174. 
+175.     def test_stripe_webhook_unknown_event(self, client):
+176.         import json
+177.         payload = json.dumps({"type": "some.unknown.event", "data": {}}).encode()
+178.         response = client.post(
+179.             "/api/v1/webhooks/stripe",
+180.             content=payload,
+181.             headers={"Content-Type": "application/json"},
+182.         )
+183.         assert response.status_code == 200
+184.         data = response.json()
+185.         assert data["status"] == "ignored"
+186. 
+187.     def test_stripe_webhook_payment_succeeded(self, client):
+188.         import json
+189.         payload = json.dumps({
+190.             "type": "invoice.payment_succeeded",
+191.             "data": {"object": {"id": "inv_test123"}},
+192.         }).encode()
+193.         response = client.post(
+194.             "/api/v1/webhooks/stripe",
+195.             content=payload,
+196.             headers={"Content-Type": "application/json"},
+197.         )
+198.         assert response.status_code == 200
+199.         assert response.json()["action"] == "payment_recorded"
+200. 
