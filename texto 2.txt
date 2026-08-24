@@ -1,50 +1,50 @@
-1. """Security auditor - runs periodic security checks and generates reports."""
+1. """Resource optimiser - monitors and optimises CPU/RAM usage."""
 2. 
 3. import logging
-4. import subprocess
-5. from datetime import datetime
-6. from typing import Any, Dict, List
-7. 
+4. from typing import Any, Dict, Optional
+5. 
+6. 
+7. logger = logging.getLogger(__name__)
 8. 
-9. logger = logging.getLogger(__name__)
-10. 
-11. 
-12. class SecurityAuditor:
-13.     """Performs periodic security audits on the server."""
-14. 
-15.     def __init__(self) -> None:
-16.         self._audit_history: List[Dict[str, Any]] = []
-17. 
-18.     # ------------------------------------------------------------------
-19.     # Audit checks
-20.     # ------------------------------------------------------------------
-21. 
-22.     def check_open_ports(self) -> Dict[str, Any]:
-23.         """List open ports using ss."""
-24.         result = subprocess.run(  # noqa: S603
-25.             ["ss", "-tlnp"],
-26.             capture_output=True,
-27.             text=True,
-28.             check=False,
-29.         )
-30.         return {
-31.             "check": "open_ports",
-32.             "output": result.stdout,
-33.             "success": result.returncode == 0,
-34.             "timestamp": datetime.utcnow().isoformat(),
-35.         }
-36. 
-37.     def check_failed_logins(self) -> Dict[str, Any]:
-38.         """Count failed login attempts in the last 24 hours using journalctl."""
-39.         result = subprocess.run(  # noqa: S603
-40.             ["journalctl", "-u", "ssh", "--since", "24 hours ago", "--no-pager", "-q"],
-41.             capture_output=True,
-42.             text=True,
-43.             check=False,
-44.         )
-45.         lines = result.stdout.splitlines() if result.stdout else []
-46.         failed = [l for l in lines if "Failed" in l or "Invalid" in l]  # noqa: E741
-47.         return {
-48.             "check": "failed_logins",
-49.             "count": len(failed),
-50.             "severity": "high" if len(failed) > 50 else "low",
+9. 
+10. class ResourceOptimizer:
+11.     """Monitors system resource usage and applies optimisations."""
+12. 
+13.     def __init__(self, cpu_threshold: float = 85.0, ram_threshold: float = 90.0) -> None:
+14.         self.cpu_threshold = cpu_threshold
+15.         self.ram_threshold = ram_threshold
+16. 
+17.     # ------------------------------------------------------------------
+18.     # Metrics
+19.     # ------------------------------------------------------------------
+20. 
+21.     def get_metrics(self) -> Dict[str, Any]:
+22.         """Return current CPU, RAM, and disk metrics."""
+23.         try:
+24.             import psutil  # type: ignore[import]
+25. 
+26.             cpu_pct = psutil.cpu_percent(interval=1)
+27.             ram = psutil.virtual_memory()
+28.             disk = psutil.disk_usage("/")
+29.             net = psutil.net_io_counters()
+30.             return {
+31.                 "cpu_percent": cpu_pct,
+32.                 "ram_percent": ram.percent,
+33.                 "ram_used_gb": round(ram.used / 1024**3, 2),
+34.                 "ram_total_gb": round(ram.total / 1024**3, 2),
+35.                 "disk_percent": disk.percent,
+36.                 "disk_used_gb": round(disk.used / 1024**3, 2),
+37.                 "disk_total_gb": round(disk.total / 1024**3, 2),
+38.                 "net_bytes_sent_mb": round(net.bytes_sent / 1024**2, 2),
+39.                 "net_bytes_recv_mb": round(net.bytes_recv / 1024**2, 2),
+40.             }
+41.         except ImportError:
+42.             logger.warning("psutil not installed; returning simulated metrics.")
+43.             return self._simulate_metrics()
+44. 
+45.     def _simulate_metrics(self) -> Dict[str, Any]:
+46.         import random
+47. 
+48.         return {
+49.             "cpu_percent": round(random.uniform(10, 60), 1),
+50.             "ram_percent": round(random.uniform(30, 70), 1),

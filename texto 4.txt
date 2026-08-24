@@ -1,31 +1,50 @@
-$ ls -la /home/runner/work/ECO-IA/ECO-IA/ | grep -E "\.py$"
--rw-rw-r-- 1 runner runner   200 Aug 15 07:02 __init__.py
--rw-rw-r-- 1 runner runner  2166 Aug 15 07:02 agent_base.py
--rw-rw-r-- 1 runner runner  3914 Aug 15 07:02 auditor.py
--rw-rw-r-- 1 runner runner  5474 Aug 15 07:02 billing.py
--rw-rw-r-- 1 runner runner  1822 Aug 15 07:02 celery_app.py
--rw-rw-r-- 1 runner runner  4657 Aug 15 07:02 cleaner.py
--rw-rw-r-- 1 runner runner  5035 Aug 15 07:02 clients.py
--rw-rw-r-- 1 runner runner  2073 Aug 15 07:02 communication.py
--rw-rw-r-- 1 runner runner  2535 Aug 15 07:02 completion.py
--rw-rw-r-- 1 runner runner   766 Aug 15 07:02 connection.py
--rw-rw-r-- 1 runner runner  5802 Aug 15 07:02 crud.py
--rw-rw-r-- 1 runner runner  2536 Aug 15 07:02 dashboard.py
--rw-rw-r-- 1 runner runner  2952 Aug 15 07:02 firewall.py
--rw-rw-r-- 1 runner runner  3699 Aug 15 07:02 intrusion_detector.py
--rw-rw-r-- 1 runner runner  2637 Aug 15 07:02 llm_connector.py
--rw-rw-r-- 1 runner runner  4199 Aug 15 07:02 main.py
--rw-rw-r-- 1 runner runner  3008 Aug 15 07:02 manager.py
--rw-rw-r-- 1 runner runner  4212 Aug 15 07:02 models.py
--rw-rw-r-- 1 runner runner  3659 Aug 15 07:02 optimizer.py
--rw-rw-r-- 1 runner runner  8593 Aug 15 07:02 orchestrator.py
--rw-rw-r-- 1 runner runner  3746 Aug 15 07:02 predictor.py
--rw-rw-r-- 1 runner runner  3756 Aug 15 07:02 pricing.py
--rw-rw-r-- 1 runner runner  3789 Aug 15 07:02 processor.py
--rw-rw-r-- 1 runner runner  4063 Aug 15 07:02 reporter.py
--rw-rw-r-- 1 runner runner  2573 Aug 15 07:02 scaler.py
--rw-rw-r-- 1 runner runner  1958 Aug 15 07:02 scheduler.py
--rw-rw-r-- 1 runner runner  2637 Aug 15 07:02 settings.py
--rw-rw-r-- 1 runner runner 19732 Aug 15 07:02 test_agents.py
--rw-rw-r-- 1 runner runner  8472 Aug 15 07:02 test_api.py
-<shellId: 4 completed with exit code 0>
+1. """Cleaner - automatic removal of logs and temporary files."""
+2. 
+3. import glob
+4. import logging
+5. import os
+6. import shutil
+7. from datetime import datetime, timedelta
+8. from pathlib import Path
+9. from typing import Any, Dict, List, Optional
+10. 
+11. 
+12. logger = logging.getLogger(__name__)
+13. 
+14. 
+15. class Cleaner:
+16.     """Automatically cleans up old logs, temp files, and Docker artefacts."""
+17. 
+18.     def __init__(
+19.         self,
+20.         log_dirs: Optional[List[str]] = None,
+21.         temp_dirs: Optional[List[str]] = None,
+22.         max_log_age_days: int = 7,
+23.         max_log_size_mb: float = 100.0,
+24.     ) -> None:
+25.         self.log_dirs = log_dirs or ["/var/log/eco-ia", "/opt/eco-ia/logs"]
+26.         self.temp_dirs = temp_dirs or []  # caller must supply safe temp dirs explicitly
+27.         self.max_log_age_days = max_log_age_days
+28.         self.max_log_size_mb = max_log_size_mb
+29.         self._cleanup_log: List[Dict[str, Any]] = []
+30. 
+31.     # ------------------------------------------------------------------
+32.     # Clean operations
+33.     # ------------------------------------------------------------------
+34. 
+35.     def clean_old_logs(self) -> Dict[str, Any]:
+36.         """Remove log files older than *max_log_age_days*."""
+37.         cutoff = datetime.utcnow() - timedelta(days=self.max_log_age_days)
+38.         removed = []
+39.         freed_bytes = 0
+40. 
+41.         for log_dir in self.log_dirs:
+42.             if not Path(log_dir).exists():
+43.                 continue
+44.             for file_path in Path(log_dir).rglob("*.log"):
+45.                 try:
+46.                     mtime = datetime.utcfromtimestamp(file_path.stat().st_mtime)
+47.                     if mtime < cutoff:
+48.                         size = file_path.stat().st_size
+49.                         file_path.unlink()
+50.                         freed_bytes += size

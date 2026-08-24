@@ -1,50 +1,72 @@
-1. """Reporter - generates automated reports and sends email alerts."""
+1. """Dashboard data aggregator for the analytics agent."""
 2. 
 3. import logging
-4. import smtplib
-5. from datetime import datetime
-6. from email.mime.multipart import MIMEMultipart
-7. from email.mime.text import MIMEText
-8. from typing import Any, Dict, List, Optional
+4. from datetime import datetime
+5. from typing import Any, Dict, List, Optional
+6. 
+7. 
+8. logger = logging.getLogger(__name__)
 9. 
 10. 
-11. logger = logging.getLogger(__name__)
-12. 
+11. class DashboardData:
+12.     """Aggregates metrics from all agents for the Grafana/web dashboard."""
 13. 
-14. class Reporter:
-15.     """Generates and distributes automated system reports."""
+14.     def __init__(self) -> None:
+15.         self._snapshots: List[Dict[str, Any]] = []
 16. 
-17.     def __init__(
+17.     def snapshot(
 18.         self,
-19.         smtp_host: Optional[str] = None,
-20.         smtp_port: int = 587,
-21.         smtp_user: Optional[str] = None,
-22.         smtp_password: Optional[str] = None,
-23.         from_email: Optional[str] = None,
-24.         to_emails: Optional[List[str]] = None,
-25.     ) -> None:
-26.         self.smtp_host = smtp_host
-27.         self.smtp_port = smtp_port
-28.         self.smtp_user = smtp_user
-29.         self.smtp_password = smtp_password
-30.         self.from_email = from_email or smtp_user
-31.         self.to_emails = to_emails or []
-32.         self._reports: List[Dict[str, Any]] = []
-33. 
-34.     # ------------------------------------------------------------------
-35.     # Report generation
-36.     # ------------------------------------------------------------------
-37. 
-38.     def generate_daily_report(self, data: Dict[str, Any]) -> Dict[str, Any]:
-39.         """Generate a structured daily report from *data*."""
-40.         report = {
-41.             "type": "daily",
-42.             "generated_at": datetime.utcnow().isoformat(),
-43.             "summary": self._build_summary(data),
-44.             "data": data,
-45.         }
-46.         self._reports.append(report)
-47.         logger.info("Daily report generated.")
-48.         return report
-49. 
-50.     def generate_alert_report(self, alert: Dict[str, Any]) -> Dict[str, Any]:
+19.         resources: Optional[Dict[str, Any]] = None,
+20.         monetization: Optional[Dict[str, Any]] = None,
+21.         security: Optional[Dict[str, Any]] = None,
+22.         devops: Optional[Dict[str, Any]] = None,
+23.     ) -> Dict[str, Any]:
+24.         """Capture a dashboard snapshot from agent data."""
+25.         snap = {
+26.             "timestamp": datetime.utcnow().isoformat(),
+27.             "resources": resources or {},
+28.             "monetization": monetization or {},
+29.             "security": security or {},
+30.             "devops": devops or {},
+31.         }
+32.         self._snapshots.append(snap)
+33.         if len(self._snapshots) > 1440:  # keep ~24h at 1-min intervals
+34.             self._snapshots = self._snapshots[-1440:]
+35.         return snap
+36. 
+37.     def get_latest(self) -> Optional[Dict[str, Any]]:
+38.         return self._snapshots[-1] if self._snapshots else None
+39. 
+40.     def get_history(self, limit: int = 60) -> List[Dict[str, Any]]:
+41.         return self._snapshots[-limit:]
+42. 
+43.     def get_kpis(self) -> Dict[str, Any]:
+44.         """Compute high-level KPIs from the latest snapshot."""
+45.         latest = self.get_latest()
+46.         if not latest:
+47.             return {"status": "no_data"}
+48. 
+49.         mon = latest.get("monetization", {})
+50.         res = latest.get("resources", {})
+51.         sec = latest.get("security", {})
+52. 
+53.         return {
+54.             "timestamp": latest["timestamp"],
+55.             "active_clients": mon.get("active_clients", 0),
+56.             "monthly_revenue_usd": mon.get("monthly_revenue_usd", 0.0),
+57.             "cpu_percent": res.get("cpu_percent", 0.0),
+58.             "ram_percent": res.get("ram_percent", 0.0),
+59.             "disk_percent": res.get("disk_percent", 0.0),
+60.             "security_alerts": sec.get("total_alerts", 0),
+61.             "system_health": self._compute_health(res, sec),
+62.         }
+63. 
+64.     def _compute_health(self, resources: Dict[str, Any], security: Dict[str, Any]) -> str:
+65.         if security.get("high_severity", 0) > 0:
+66.             return "critical"
+67.         cpu = resources.get("cpu_percent", 0)
+68.         ram = resources.get("ram_percent", 0)
+69.         if cpu > 90 or ram > 90:
+70.             return "warning"
+71.         return "healthy"
+72. 
