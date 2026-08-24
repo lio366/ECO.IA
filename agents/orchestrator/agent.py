@@ -35,11 +35,14 @@ class OrchestratorAgent(AgentBase):
         message_bus: MessageBus | None = None,
         scheduler: TaskScheduler | None = None,
         health_check_timeout: float = HEALTH_CHECK_TIMEOUT,
+        llm: Any = None,
+        config: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__("orchestrator")
+        super().__init__("orchestrator", config=config)
         self.message_bus = message_bus or MessageBus()
         self.scheduler = scheduler or TaskScheduler()
         self.health_check_timeout = health_check_timeout
+        self.llm = llm
 
         # Registry of known specialist agents: name -> status dict
         self._agent_registry: dict[str, dict[str, Any]] = {}
@@ -89,6 +92,10 @@ class OrchestratorAgent(AgentBase):
 
     async def health_check(self) -> bool:
         return self.is_running
+
+    def get_config(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
+        """Return a value from the agent config with an optional default."""
+        return self.config.get(key, default)
 
     # ------------------------------------------------------------------
     # Health-check logic
@@ -140,3 +147,14 @@ class OrchestratorAgent(AgentBase):
             "agents": dict(self._agent_registry),
             "missed_pongs": dict(self._missed_pongs),
         }
+
+    async def _generate_executive_report(self) -> None:
+        """Log a periodic executive summary of all registered agents."""
+        healthy = sum(1 for s in self._agent_registry.values() if s.get("status") == "active")
+        total = len(self._agent_registry)
+        logger.info(
+            "Executive report: %d/%d agents healthy | missed_pongs=%s",
+            healthy,
+            total,
+            dict(self._missed_pongs),
+        )

@@ -36,11 +36,26 @@ class TaskScheduler:
         self._tasks: dict[str, ScheduledTask] = {}
         self._running = False
 
-    def register(self, name: str, func: TaskFunc, interval: float) -> ScheduledTask:
-        """Register *func* to be called every *interval* seconds."""
-        scheduled = ScheduledTask(name=name, func=func, interval=interval)
+    def register(
+        self,
+        name: str,
+        func: TaskFunc,
+        interval: float | None = None,
+        *,
+        interval_seconds: float | None = None,
+        description: str = "",
+    ) -> ScheduledTask:
+        """Register *func* to be called every *interval* (or *interval_seconds*) seconds."""
+        resolved = interval if interval is not None else interval_seconds
+        if resolved is None:
+            raise ValueError("Either 'interval' or 'interval_seconds' must be provided")
+        scheduled = ScheduledTask(name=name, func=func, interval=resolved)
         self._tasks[name] = scheduled
         return scheduled
+
+    def list_tasks(self) -> list[ScheduledTask]:
+        """Alias for :meth:`get_tasks`."""
+        return list(self._tasks.values())
 
     def get_tasks(self) -> list[ScheduledTask]:
         return list(self._tasks.values())

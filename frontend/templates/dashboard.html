@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECO-IA Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header { padding: 1.5rem 2rem; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.5rem; font-weight: 700; color: #38bdf8; }
+    header span { font-size: 0.85rem; color: #94a3b8; }
+    main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.25rem; }
+    .card h2 { font-size: 0.9rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 2rem; font-weight: 700; color: #38bdf8; margin-top: 0.5rem; }
+    .card .sub { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    .agents { margin-top: 2rem; }
+    .agents h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 0.75rem; overflow: hidden; }
+    th { padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+    td { padding: 0.75rem 1rem; font-size: 0.9rem; border-bottom: 1px solid #1e293b; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge.running { background: #052e16; color: #4ade80; }
+    .badge.stopped { background: #450a0a; color: #f87171; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌱 ECO-IA</h1>
+    <span>Autonomous AI-Agent System</span>
+    <div style="margin-left:auto;display:flex;gap:1rem;">
+      <a href="/docs">API Docs</a>
+      <a href="/api/v1/admin/health">Health</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid" id="kpi-grid">
+      <div class="card">
+        <h2>System</h2>
+        <div class="value" id="system-status">—</div>
+        <div class="sub">Overall status</div>
+      </div>
+      <div class="card">
+        <h2>Agents</h2>
+        <div class="value" id="agent-count">—</div>
+        <div class="sub">Registered agents</div>
+      </div>
+      <div class="card">
+        <h2>Version</h2>
+        <div class="value">1.0.0</div>
+        <div class="sub">ECO-IA API</div>
+      </div>
+    </div>
+
+    <div class="agents">
+      <h2>Agent Status</h2>
+      <table id="agent-table">
+        <thead>
+          <tr>
+            <th>Agent</th>
+            <th>State</th>
+            <th>Tasks OK</th>
+            <th>Tasks Failed</th>
+          </tr>
+        </thead>
+        <tbody id="agent-tbody">
+          <tr><td colspan="4" style="color:#64748b;text-align:center;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    async function refresh() {
+      try {
+        const [health, agents] = await Promise.all([
+          fetch('/health').then(r => r.json()),
+          fetch('/api/v1/admin/agents').then(r => r.json()),
+        ]);
+
+        document.getElementById('system-status').textContent = health.status ?? '—';
+
+        const agentsMap = agents.agents ?? {};
+        const names = Object.keys(agentsMap);
+        document.getElementById('agent-count').textContent = names.length;
+
+        const tbody = document.getElementById('agent-tbody');
+        if (names.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:#64748b;text-align:center;">No agents registered</td></tr>';
+          return;
+        }
+        tbody.innerHTML = names.map(name => {
+          const a = agentsMap[name];
+          const state = a.is_running ? 'running' : 'stopped';
+          return `<tr>
+            <td>${name}</td>
+            <td><span class="badge ${state}">${state}</span></td>
+            <td>${a.tasks_completed ?? 0}</td>
+            <td>${a.tasks_failed ?? 0}</td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        console.error('Dashboard refresh error', e);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>
