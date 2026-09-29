@@ -1,5 +1,0 @@
-$ grep -r "class.*Agent" /home/runner/work/ECO-IA/ECO-IA --include="*.py" 2>/dev/null | head -20
-/home/runner/work/ECO-IA/ECO-IA/models.py:class AgentEvent(Base):
-/home/runner/work/ECO-IA/ECO-IA/orchestrator.py:class OrchestratorAgent(AgentBase):
-/home/runner/work/ECO-IA/ECO-IA/agent_base.py:class AgentBase(ABC):
-<shellId: 6 completed with exit code 0>

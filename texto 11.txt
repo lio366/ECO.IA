@@ -1,6 +1,0 @@
-/home/runner/work/ECO-IA/ECO-IA/main.py:9:from fastapi.middleware.cors import CORSMiddleware
-/home/runner/work/ECO-IA/ECO-IA/main.py:13:from api.middleware.auth import APIKeyMiddleware
-/home/runner/work/ECO-IA/ECO-IA/main.py:14:from api.middleware.rate_limit import RateLimitMiddleware
-/home/runner/work/ECO-IA/ECO-IA/main.py:47:    app.add_middleware(
-/home/runner/work/ECO-IA/ECO-IA/main.py:56:    app.add_middleware(RateLimitMiddleware)
-/home/runner/work/ECO-IA/ECO-IA/main.py:57:    app.add_middleware(APIKeyMiddleware)
