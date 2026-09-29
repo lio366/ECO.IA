@@ -1,38 +1,29 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "eco-ia"
 version = "1.0.0"
-description = "Autonomous AI-Agent server system"
+description = "Autonomous AI-Agent server system — OVHcloud US b3-8"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-keywords = ["AI", "agents", "autonomous", "server", "monetization"]
+keywords = ["AI", "agents", "autonomous", "server", "monetization", "OVHcloud"]
 authors = [{ name = "Liorvys Guardiola" }]
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.34",
-    "pydantic>=2.11",
-    "openai>=1.72",
-    "celery[redis]>=5.5",
-    "redis>=5.2",
-    "sqlalchemy>=2.0",
-    "psutil>=7.0",
-    "stripe>=11.6",
-    "prometheus-client>=0.21",
-    "python-dotenv>=1.1",
-    "pyyaml>=6.0",
-    "httpx>=0.28",
+    "fastapi>=0.115", "uvicorn[standard]>=0.34", "pydantic>=2.11",
+    "openai>=1.72", "celery[redis]>=5.5", "redis>=5.2",
+    "sqlalchemy>=2.0", "psutil>=7.0", "stripe>=11.6",
+    "prometheus-client>=0.21", "python-dotenv>=1.1", "pyyaml>=6.0", "httpx>=0.28",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3", "pytest-asyncio>=0.26", "pytest-cov>=6.1", "ruff>=0.4"]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.26", "pytest-cov>=6.1"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["."]
 
 [tool.ruff]
 line-length = 100
